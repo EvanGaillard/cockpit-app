@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cockpit</title>
+<meta name="description" content="Le tableau de bord d'Evan : tâches, projets, habitudes, humeur, rituels et équipe.">
+<meta name="theme-color" content="#F2F3EE">
+<meta name="color-scheme" content="light">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cockpit">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preload" href="fonts/bricolage.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/dmsans.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <nav class="rail" aria-label="Navigation">
+    <span class="brand">Cockpit</span>
+    <div class="nav">
+      <a href="#aujourdhui" data-v="aujourdhui"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><span class="lbl">Aujourd'hui</span><span class="sr">Aujourd'hui</span></a>
+      <a href="#taches" data-v="taches"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12l3 3 5-6"/></svg><span class="lbl">Tâches</span><span class="sr">Tâches</span></a>
+      <a href="#saisie" class="plus" data-qa><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="sr">Saisie express</span></a>
+      <a href="#projets" data-v="projets"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h12"/></svg><span class="lbl">Projets</span><span class="sr">Projets</span></a>
+      <a href="#notes" data-v="notes"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg><span class="lbl">Idées</span><span class="sr">Boîte à idées</span></a>
+      <a href="#semaine" data-v="semaine"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lbl">Semaine</span><span class="sr">Semaine</span></a>
+      <a href="#equipe" data-v="equipe"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.8c1.7.8 2.7 2.6 3 5.2"/></svg><span class="lbl">Équipe</span><span class="sr">Équipe</span><span class="badge" id="eq-badge" hidden></span></a>
+    </div>
+    <button class="btn primary sm qa-open" type="button" data-qa>+ Saisie express</button>
+    <a class="sync" href="#reglages" aria-label="Synchronisation et réglages">
+      <span class="eyebrow">Synchro · Réglages</span>
+      <span class="st"><span class="dot wait" id="sync-dot"></span><span id="sync-t">Démarrage…</span></span>
+    </a>
+  </nav>
+
+  <main>
+    <!-- AUJOURD'HUI -->
+    <section class="view" id="v-aujourdhui" aria-label="Aujourd'hui">
+      <div class="banner" id="setup-banner" hidden><span><strong>Bienvenue.</strong> Pour charger tes données, colle ton jeton GitHub dans les réglages. Tout ce que tu ajoutes avant reste sur cet appareil et sera envoyé ensuite.</span><a class="btn primary sm" href="#reglages" style="text-decoration:none">Ouvrir les réglages</a></div>
+      <div class="bento">
+        <section class="tile s4 obj" id="obj" hidden aria-label="Objectif du jour"></section>
+        <section class="tile s4 ritual" id="ritual" hidden aria-label="Rituel du jour"></section>
+        <section class="tile datet s2" aria-label="Date">
+          <div class="bigdate" id="bigdate">—</div>
+          <div class="greet"><a class="synclink" href="#reglages" id="sync-chip" aria-label="État de la synchronisation"><span class="dot wait" id="sync-dot2"></span><span id="sync-t2">…</span></a><span class="eyebrow" id="weekl">—</span><b id="greet">Bonjour Evan.</b></div>
+        </section>
+        <section class="tile ink focus s2 r2" id="focus" aria-labelledby="f-title"></section>
+        <section class="tile sage" aria-labelledby="h-hab">
+          <div class="th"><h2 id="h-hab">Habitudes</h2><span class="mono" id="hab-n">0/0</span></div>
+          <div id="hab-today"></div>
+        </section>
+        <section class="tile lilac" aria-labelledby="h-mood">
+          <div class="th"><h2 id="h-mood">Humeur</h2><span class="mono" id="mood-avg">—</span></div>
+          <div class="bars" id="mood-bars" aria-hidden="true"></div>
+          <div class="scale" id="sc-m"></div>
+          <div class="scale" id="sc-e"></div>
+        </section>
+        <section class="tile s2" aria-labelledby="h-next">
+          <div class="th"><h2 id="h-next">Ensuite</h2><span class="mono" id="next-meta"></span></div>
+          <ul class="rows" id="next-list"></ul>
+          <form class="form" id="task-form" autocomplete="off">
+            <label class="sr" for="task-title">Nouvelle tâche</label>
+            <input class="field grow" id="task-title" placeholder="Ajouter une tâche…" required>
+            <label class="sr" for="task-prio">Priorité</label>
+            <select class="field" id="task-prio"><option value="haute">Haute</option><option value="moyenne" selected>Moyenne</option><option value="basse">Basse</option></select>
+            <label class="sr" for="task-due">Échéance</label>
+            <input class="field" type="date" id="task-due">
+            <label class="sr" for="task-goal">Projet</label>
+            <select class="field" id="task-goal"><option value="">Sans projet</option></select>
+            <button class="btn primary sm" type="submit" id="task-submit">Ajouter</button>
+            <button class="btn sm" type="button" id="task-cancel" hidden>Annuler</button>
+          </form>
+        </section>
+        <section class="tile peach s2" aria-labelledby="h-prj">
+          <div class="th"><h2 id="h-prj">Projets</h2><a class="linkbtn" href="#projets">Tout voir</a></div>
+          <div class="pgrid" id="prj-mini"></div>
+        </section>
+      </div>
+    </section>
+
+    <!-- SEMAINE -->
+    <section class="view" id="v-semaine" aria-label="Semaine" hidden>
+      <div class="wkhead">
+        <div><span class="eyebrow" id="wk-range">—</span><h1 id="wk-title">Semaine</h1></div>
+        <div class="btns" style="margin-top: 0;">
+          <button class="btn" type="button" id="wk-prev">Semaine précédente</button>
+          <button class="btn" type="button" id="wk-now" hidden>Cette semaine</button>
+          <button class="btn" type="button" id="wk-next">Semaine suivante</button>
+        </div>
+      </div>
+      <section class="tile edt" id="edt" aria-labelledby="h-edt"></section>
+      <div class="days" id="days"></div>
+      <div class="bento">
+        <section class="tile s2" aria-labelledby="h-hw"><div class="th"><h2 id="h-hw">Habitudes de la semaine</h2></div><div class="hgrid" id="hgrid"></div></section>
+        <section class="tile peach" aria-labelledby="h-left"><div class="th"><h2 id="h-left">Reste à faire</h2></div><div class="bigdate" style="font-size: 64px;" id="left-n">0</div><span id="left-t"></span></section>
+        <section class="tile lilac" aria-labelledby="h-prod"><div class="th"><h2 id="h-prod">Tâches faites</h2><span class="mono">8 semaines</span></div><div id="prod"></div></section>
+        <section class="tile s4" aria-labelledby="h-m30"><div class="th"><h2 id="h-m30">Humeur et énergie</h2><span class="mono">30 jours · <span style="color: var(--blue);">humeur</span> · énergie</span></div><div id="m30"></div></section>
+      </div>
+    </section>
+
+    <!-- TACHES -->
+    <section class="view" id="v-taches" aria-label="Tâches" hidden>
+      <div class="wkhead"><div><span class="eyebrow" id="tk-meta">—</span><h1 id="tk-h">Tâches</h1></div><button class="btn primary sm" type="button" data-qa>+ Nouvelle tâche</button></div>
+      <div class="tabs" id="tk-tabs" role="group" aria-label="Listes"></div>
+      <div class="tabs" id="tk-tagbar" role="group" aria-label="Filtrer par tag" hidden></div>
+      <section class="tile" id="tk-body" aria-live="polite"></section>
+    </section>
+
+    <!-- PROJETS -->
+    <section class="view" id="v-projets" aria-label="Projets" hidden>
+      <div class="wkhead"><div><span class="eyebrow" id="prj-meta">—</span><h1>Projets</h1></div></div>
+      <form class="form tile" id="goal-form" autocomplete="off" style="flex-direction: row; padding: 12px;">
+        <label class="sr" for="goal-title">Nouveau projet</label>
+        <input class="field grow" id="goal-title" placeholder="Nouveau projet…" required>
+        <button class="btn primary sm" type="submit">Créer le projet</button>
+      </form>
+      <section class="tile peach" id="shop" hidden aria-labelledby="h-shop">
+        <div class="th"><h2 id="h-shop">Liste d'achats</h2><button class="btn sm" type="button" id="shop-copy">Copier la liste</button></div>
+        <ul class="plist shop" id="shop-list"></ul>
+      </section>
+      <div class="pcards" id="pcards"></div>
+    </section>
+
+    <!-- NOTES -->
+    <section class="view" id="v-notes" aria-label="Notes" hidden>
+      <div class="wkhead"><div><span class="eyebrow">Capture rapide</span><h1>Boîte à idées</h1></div></div>
+      <section class="tile" aria-labelledby="h-cap">
+        <div class="th"><h2 id="h-cap">Vider ta tête</h2><span class="mono">texte et références : Léon range tout le soir</span></div>
+        <div class="capkinds" role="group" aria-label="Type de capture" id="kinds"></div>
+        <label class="sr" for="cap-text">Ta capture</label>
+        <textarea class="field" id="cap-text" placeholder="Une idée, une référence, une chose à acheter, une pensée pour ton journal…"></textarea>
+        <div class="caprow">
+          <label class="sr" for="cap-goal">Projet concerné</label>
+          <select class="field" id="cap-goal"><option value="">Projet : à deviner</option></select>
+        </div>
+        <div class="btns" style="margin-top: 0;"><button class="btn primary sm" type="button" id="cap-save">Enregistrer</button><span class="hint" id="cap-hint">Photos : pas encore dans l'app. Décris la photo en texte, ou envoie-la dans le Cockpit en ligne ou au bureau de Léon.</span></div>
+      </section>
+      <section class="tile" aria-labelledby="h-inbox">
+        <div class="th"><h2 id="h-inbox">En attente de rangement</h2><span class="mono" id="inbox-n"></span></div>
+        <span class="hint" id="inbox-hint" hidden>La revue du soir de Léon range tout ça dans le coffre.</span>
+        <div id="inbox"></div>
+      </section>
+    </section>
+
+    <!-- ÉQUIPE -->
+    <section class="view" id="v-equipe" aria-label="Équipe" hidden>
+      <div class="wkhead"><div><span class="eyebrow" id="eq-meta">—</span><h1>Équipe</h1></div></div>
+      <section class="tile ink" aria-labelledby="h-ask">
+        <div class="th"><h2 id="h-ask">Demande à Léon</h2><span class="mono" style="color:#B8BCC6">ton directeur de compte</span></div>
+        <label class="sr" for="eq-text">Ta demande</label>
+        <textarea class="field" id="eq-text" placeholder="Ce que tu veux qu'on fasse pour toi : « compare 3 assurances habitation pour l'appart », « fais-moi une fiche de révision sur Newton »…"></textarea>
+        <div class="form">
+          <label class="sr" for="eq-due">Pour quand (optionnel)</label><input type="date" class="field" id="eq-due" title="Pour quand (optionnel)">
+          <button class="btn light sm" type="button" id="eq-send">Envoyer à Léon</button>
+          <a class="btn outline sm" style="text-decoration:none" href="https://claude.ai/code/session_01Lu3W2sovapt3TaBs8cNgh7" target="_blank" rel="noopener">Ouvrir le bureau de Léon ↗</a>
+        </div>
+        <span class="hint" style="color:#B8BCC6">Ici : une demande courte, traitée vers 7 h, 13 h et 20 h. Pour discuter, joindre un document ou suivre un travail en direct : le bureau de Léon.</span>
+      </section>
+      <section class="tile" aria-labelledby="h-tk">
+        <div class="th"><h2 id="h-tk">Tickets</h2><span class="mono" id="eq-n"></span></div>
+        <div class="tabs" id="eq-tabs" role="group" aria-label="Filtrer les tickets"></div>
+        <div id="eq-list"></div>
+      </section>
+      <div class="bento">
+        <section class="tile s2 lilac" aria-labelledby="h-com"><div class="th"><h2 id="h-com">Comité de direction</h2><span class="mono" id="eq-com-d"></span></div><div class="brief" id="eq-com"></div></section>
+        <section class="tile s2 peach" aria-labelledby="h-bud"><div class="th"><h2 id="h-bud">Budget IA</h2><span class="mono">tickets traités · 7 jours</span></div><div id="eq-bud"></div></section>
+        <section class="tile s4" aria-labelledby="h-team"><div class="th"><h2 id="h-team">L'équipe</h2><span class="mono">qui fait quoi</span></div><div class="team" id="eq-team"></div></section>
+        <section class="tile s4" aria-labelledby="h-jrn"><div class="th"><h2 id="h-jrn">Journal des actions</h2><span class="mono">les plus récentes</span></div><ul class="jrn" id="eq-jrn"></ul></section>
+      </div>
+    </section>
+
+    <!-- RÉGLAGES -->
+    <section class="view" id="v-reglages" aria-label="Réglages" hidden>
+      <div class="wkhead"><div><span class="eyebrow" id="set-meta">Synchronisation avec le coffre</span><h1>Réglages</h1></div></div>
+      <div class="bento">
+        <section class="tile s2" aria-labelledby="h-sync">
+          <div class="th"><h2 id="h-sync">Synchronisation</h2><span class="mono" id="set-st"></span></div>
+          <dl class="kv2" id="set-kv"></dl>
+          <div class="btns"><button class="btn primary sm" type="button" id="set-sync">Synchroniser maintenant</button></div>
+        </section>
+        <section class="tile s2 lilac" aria-labelledby="h-tok">
+          <div class="th"><h2 id="h-tok">Jeton GitHub</h2><span class="mono" id="tok-st"></span></div>
+          <form id="set-form" class="setgrid" autocomplete="off">
+            <label class="full">Jeton (« fine-grained », limité au dépôt du coffre)
+              <input class="field" type="password" id="set-token" placeholder="github_pat_…" autocomplete="off" autocapitalize="off" spellcheck="false">
+            </label>
+            <details class="adv full"><summary>Dépôt et dossier (déjà remplis)</summary>
+              <div class="setgrid" style="margin-top:8px">
+                <label>Propriétaire<input class="field" id="set-owner" autocapitalize="off" spellcheck="false"></label>
+                <label>Dépôt<input class="field" id="set-repo" autocapitalize="off" spellcheck="false"></label>
+                <label>Branche<input class="field" id="set-branch" autocapitalize="off" spellcheck="false"></label>
+                <label>Dossier des données<input class="field" id="set-dir" autocapitalize="off" spellcheck="false"></label>
+              </div>
+            </details>
+            <div class="btns full" style="margin-top:0"><button class="btn primary sm" type="submit">Enregistrer</button><button class="btn sm" type="button" id="set-test">Tester le jeton</button></div>
+            <div class="full" id="set-res" role="status"></div>
+          </form>
+          <span class="hint">Le jeton reste seulement sur cet appareil. Il n'est jamais écrit dans le coffre. Laisse le champ vide pour garder le jeton actuel.</span>
+        </section>
+        <section class="tile s2 peach" aria-labelledby="h-lim">
+          <div class="th"><h2 id="h-lim">Ce que l'app ne fait pas (v1)</h2></div>
+          <ul class="limits">
+            <li>Pas de copilote : demande à Léon (onglet Équipe ou son bureau).</li>
+            <li>Pas de photos : les photos déjà jointes restent visibles dans le Cockpit en ligne.</li>
+            <li>Pas de Google Agenda : l'app montre le programme de 10 semaines, pas tes rendez-vous.</li>
+          </ul>
+        </section>
+        <section class="tile s2" aria-labelledby="h-dev">
+          <div class="th"><h2 id="h-dev">Cet appareil</h2><span class="mono" id="app-ver"></span></div>
+          <span class="hint">Effacer le jeton et la copie locale (par exemple avant de prêter ou de revendre l'appareil). Les changements pas encore envoyés seraient perdus.</span>
+          <div class="btns"><button class="x" type="button" id="set-forget">Oublier cet appareil</button></div>
+        </section>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" hidden role="status"></div>
+<div class="update" id="update" hidden role="status"><span>Nouvelle version de l'app.</span><button class="btn light sm" type="button" id="update-go">Recharger</button></div>
+<div class="qa-back" id="qa" hidden>
+  <form class="tile qa" id="qa-form" autocomplete="off" role="dialog" aria-modal="true" aria-labelledby="qa-h">
+    <div class="th"><h2 id="qa-h">Saisie express</h2><span class="mono">touche N · Échap pour fermer</span></div>
+    <label class="sr" for="qa-title">Titre de la tâche</label>
+    <input class="field ttl" id="qa-title" placeholder="Nouvelle tâche… (#tag pour étiqueter)" required maxlength="200">
+    <span class="eyebrow">Quand je la fais</span>
+    <div class="tabs" id="qa-when" role="group" aria-label="Quand"></div>
+    <label class="sr" for="qa-start">Date où je m'y mets</label>
+    <input type="date" class="field" id="qa-start" hidden>
+    <div class="form">
+      <label class="sr" for="qa-goal">Projet</label><select class="field grow" id="qa-goal"></select>
+      <label class="sr" for="qa-prio">Priorité</label><select class="field" id="qa-prio"><option value="haute">Haute</option><option value="moyenne" selected>Moyenne</option><option value="basse">Basse</option></select>
+      <label class="sr" for="qa-due">Échéance</label><input type="date" class="field" id="qa-due" title="Échéance (date limite)">
+    </div>
+    <label class="sr" for="qa-tags">Tags</label>
+    <input class="field" id="qa-tags" placeholder="Tags, séparés par des virgules (ex. école, appel)">
+    <div class="btns"><button class="btn primary" type="submit">Ajouter</button><button class="btn" type="button" id="qa-close">Annuler</button></div>
+    <span class="hint" id="qa-hint">Sans choix, elle va dans la boîte de réception : tu la tries plus tard.</span>
+  </form>
+</div>
+<script src="merge.js"></script>
+<script src="store.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
