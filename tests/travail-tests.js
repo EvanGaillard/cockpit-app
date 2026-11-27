@@ -35,7 +35,7 @@ async function until(fn, ms) { const t0 = Date.now(); while (Date.now() - t0 < (
 
     // 1. Travailler dessus sans choix : la demande est déposée dans le document, sans style ni consigne
     await page.click("#dv-detail [data-work]");
-    check(label + " · demande déposée dans le dépôt (statut demande, prof, texte)", await until(() => { const t = dv().travail; return t && t.statut === "demande" && t.prof === "Margaux" && t.style === null && t.consigne === null && /Projet tutoré VBA/.test(t.demande) && /^[a-z0-9]{8}$/.test(t.id); }));
+    check(label + " · demande déposée dans le dépôt (statut demande, prof, texte)", await until(() => { const t = dv().travail; return t && t.statut === "demande" && t.prof === "Margaux" && t.style === null && t.consigne === null && /Projet tutoré VBA/.test(t.demande) && !/minutes/.test(t.demande) && /^[a-z0-9]{8}$/.test(t.id); }));
     check(label + " · commit « app : academie »", mock.commits.some((c) => c.message === "app : academie"));
     check(label + " · aucune ouverture du bureau (plus besoin de coller)", (await page.evaluate(() => window.__opened.length)) === 0);
     check(label + " · la fiche affiche « Demandé à Margaux » et bloque un second envoi", /Demandé à Margaux/.test(await page.textContent("#dv-travail")) && (await page.isDisabled("#dv-detail [data-work]")) && (await page.textContent("#dv-detail [data-work]")).trim() === "Déjà demandé");
@@ -48,20 +48,39 @@ async function until(fn, ms) { const t0 = Date.now(); while (Date.now() - t0 < (
     // 3. Avec un choix de Samuel (défi) : le style et la consigne voyagent avec la demande
     await page.click('#dv-detail [data-sam-st="defi"]');
     await page.click("#dv-detail [data-work]");
-    check(label + " · défi : style et consigne de Samuel dans la demande", await until(() => { const t = dv().travail; return t.statut === "demande" && t.style === "defi" && /Consigne de Samuel/.test(t.consigne || ""); }));
+    check(label + " · défi : seul le style est déposé (pas de texte de consigne, demande neutre)", await until(() => { const t = dv().travail; return t.statut === "demande" && t.style === "defi" && t.consigne === null && !/défi|Samuel|minutes/i.test(t.demande); }));
     check(label + " · le choix est oublié dans l'appli après l'envoi", (await page.locator("#dv-detail .samuel .pill.on").count()) === 0);
     // 4. La routine (simulée) prend le travail : en_cours, style et consigne effacés
-    mock.external("academie.json", (d) => { const x = d.devoirs.find((y) => y.id === "dvsim506"); x.travail.statut = "en_cours"; x.travail.style = null; x.travail.consigne = null; x.travail.maj = new Date().toISOString(); });
+    mock.external("academie.json", (d) => { const x = d.devoirs.find((y) => y.id === "dvsim506"); x.travail.statut = "en_cours"; x.travail.maj = new Date().toISOString(); });
     await resync();
     check(label + " · la fiche affiche « Margaux y travaille »", await until(async () => /Margaux y travaille/.test(await page.textContent("#dv-travail")), 12000));
     // 5. Rendu prêt
-    mock.external("academie.json", (d) => { const x = d.devoirs.find((y) => y.id === "dvsim506"); Object.assign(x.travail, { statut: "pret", resume: "Plan du rendu en 5 parties (simulation).", rendu: "Apprendre/Devoir - simulation.md", maj: new Date().toISOString() }); });
+    mock.external("academie.json", (d) => { const x = d.devoirs.find((y) => y.id === "dvsim506"); Object.assign(x.travail, { statut: "pret", style: null, resume: "Plan du rendu en 5 parties (simulation). <img src=x onerror=alert(1)>", rendu: "Apprendre/Devoir - simulation.md", maj: new Date().toISOString() }); });
     await resync();
     check(label + " · « Rendu prêt » avec le résumé et la note", await until(async () => { const t = await page.textContent("#dv-travail"); return /Rendu prêt/.test(t) && /Plan du rendu en 5 parties/.test(t) && /Apprendre\/Devoir - simulation\.md/.test(t); }, 12000));
     check(label + " · on peut redemander un travail", !(await page.isDisabled("#dv-detail [data-work]")));
+    check(label + " · résumé piégé affiché comme du texte", (await page.locator("#dv-travail img").count()) === 0 && (await page.textContent("#dv-travail")).includes("<img src=x onerror=alert(1)>"));
     await page.screenshot({ path: path.join(SHOTS, slug + "-2-pret.png"), fullPage: true });
     await page.evaluate(() => (location.hash = "devoirs"));
     check(label + " · la liste montre « Rendu prêt »", await until(async () => /Rendu prêt/.test(await page.textContent("#dv-list"))));
+    // 6. Erreur rendue par la routine
+    mock.external("academie.json", (d) => { const x = d.devoirs.find((y) => y.id === "dvsim506"); Object.assign(x.travail, { statut: "erreur", erreur: "Sujet introuvable (simulation).", maj: new Date().toISOString() }); });
+    await page.evaluate(() => (location.hash = "devoir/dvsim506")); await resync();
+    check(label + " · erreur : message affiché et relance possible", await until(async () => /n'a pas pu être fait/.test(await page.textContent("#dv-travail")) && /Sujet introuvable/.test(await page.textContent("#dv-travail")), 12000) && !(await page.isDisabled("#dv-detail [data-work]")));
+    // 7. En cours bloqué depuis plus de 3 h : on peut relancer
+    mock.external("academie.json", (d) => { const x = d.devoirs.find((y) => y.id === "dvsim506"); Object.assign(x.travail, { statut: "en_cours", maj: new Date(Date.now() - 4 * 3600 * 1000).toISOString() }); });
+    await resync();
+    check(label + " · en cours bloqué (> 3 h) : signalé, bouton disponible", await until(async () => /Pas de nouvelles depuis plus de 3 h/.test(await page.textContent("#dv-travail")), 12000) && !(await page.isDisabled("#dv-detail [data-work]")));
+    // 8. Demande déjà déposée depuis un autre appareil, pas encore vue ici : aucun remplacement
+    mock.external("academie.json", (d) => { const x = d.devoirs.find((y) => y.id === "dvsim506"); x.travail = { id: "autreapp", statut: "demande", style: null, consigne: null, demande: "Avancer (autre appareil)", prof: "Margaux", at: new Date().toISOString(), maj: new Date().toISOString() }; });
+    await page.click("#dv-detail [data-work]"); // l'écran n'a pas encore reçu la demande de l'autre appareil
+    await resync();
+    check(label + " · demande d'un autre appareil gardée (pas de doublon)", await until(() => dv().travail.id === "autreapp", 12000) && await until(async () => (await page.isDisabled("#dv-detail [data-work]")), 8000));
+    // 9. Doux : seul le style « doux » est déposé
+    mock.external("academie.json", (d) => { const x = d.devoirs.find((y) => y.id === "dvsim506"); x.travail.statut = "annule"; x.travail.maj = new Date().toISOString(); });
+    await resync(); await until(async () => !(await page.isDisabled("#dv-detail [data-work]")), 12000);
+    await page.click('#dv-detail [data-sam-st="doux"]'); await page.click("#dv-detail [data-work]");
+    check(label + " · doux : style « doux » déposé, demande neutre", await until(() => { const t = dv().travail; return t.statut === "demande" && t.style === "doux" && t.id !== "autreapp" && !/15/.test(t.demande); }));
     // 6. Secours : l'ancien parcours (copie + bureau) marche toujours et n'écrit rien
     await page.evaluate(() => (location.hash = "devoir/dvsim506")); await page.waitForSelector("#dv-detail [data-bureau]");
     const n0 = mock.commits.length;

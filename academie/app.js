@@ -5,8 +5,9 @@
  *  echeances:[{id,libelle,date,heure,pour: tous|alternants|initiaux,statut: confirmee|a_verifier|passee,source,maj}],
  *  questions:[{id,texte,pour: margaux|sami|evan,statut: ouverte|repondue,reponse,maj}], agenda:{statut: aucun|cree,raison,maj}.
  *  travail (ticket #6, « Travailler dessus » automatique) : {id, statut: demande|en_cours|pret|annule|erreur, style: demarrer|doux|defi|null,
- *  consigne (consigne de Samuel ou null), demande (texte), prof, at, maj, resume, rendu, erreur}. L'appli écrit « demande » et « annule » ;
- *  la routine de Margaux écrit « en_cours », « pret » (resume, rendu) ou « erreur », et remet style et consigne à null dès qu'elle prend le travail.
+ *  consigne (toujours null : jamais écrite par l'appli, la routine la reconstruit à partir du style), demande (texte neutre), prof, at, maj, resume, rendu, erreur}.
+ *  L'appli écrit seulement « demande » et « annule » ; la routine de Margaux écrit « en_cours », « pret » (resume, rendu) ou « erreur »
+ *  et remet style à null quand le travail est fini. Un « en_cours » sans nouvelle depuis 3 h est considéré comme bloqué (on peut relancer).
  *  Règle : due = date CONFIRMÉE de la prochaine échéance, sinon null ; l'agenda n'est rempli que pour une date confirmée.
  * {maj, bureau, matieres:[{id,nom,prof,couleur,maison,ordre}], devoirs:[{id,titre,matiere,prof,due,source,docs,statut,manque,rendu,tache,created,maj}],
  *  seances:[{id,date,matiere,prof,mode,duree,bilan,suite,note,maj}], idees:[{id,texte,created,statut,reponse,maj}], prochaine:{matiere,raison,date}}
@@ -112,8 +113,9 @@
     return { kind: "delaissee", matiere: pick.m.id, titre: "Une séance de " + pick.m.nom.split(" · ")[0].toLowerCase(), raison: pick.last ? "Dernière séance il y a " + days(pick.last, t) + " j." : "Pas encore de séance : on commence en douceur, 20 minutes." };
   }
   // ---------- Samuel : « comment veux-tu travailler ? » ----------
-  // Facultatif, en un geste, valable pour UNE séance : le choix vit seulement en mémoire (jamais dans le dépôt,
-  // ni dans le navigateur), il est oublié dès que la séance est lancée ou que la page est rechargée.
+  // Facultatif, en un geste, valable pour UNE séance : le choix vit en mémoire et est oublié dès que la séance est lancée
+  // ou que la page est rechargée. Seule exception : « Travailler dessus » (file d'attente, ticket #6) dépose le style
+  // (une valeur parmi trois) dans le document le temps du travail ; la routine l'efface ensuite (il reste dans l'historique privé).
   // Il change le premier pas proposé et ajoute une consigne pédagogique au message que le prof reçoit via Margaux.
   const STYLES = { demarrer: "J'ai du mal à démarrer", doux: "Je veux y aller doucement", defi: "J'ai envie d'un défi" };
   let sam = { key: null, st: null }, samTimer = null;
@@ -226,7 +228,9 @@
 
   // ---------- travail automatique (ticket #6) ----------
   const TRAV = { demande: "Demandé", en_cours: "En cours", pret: "Rendu prêt", erreur: "À reprendre" };
-  const travActif = (d) => !!(d.travail && (d.travail.statut === "demande" || d.travail.statut === "en_cours"));
+  const BLOQUE_MS = 3 * 3600 * 1000;
+  const travBloque = (t) => !!(t && t.statut === "en_cours" && t.maj && Date.now() - new Date(t.maj).getTime() > BLOQUE_MS);
+  const travActif = (d) => !!(d.travail && (d.travail.statut === "demande" || (d.travail.statut === "en_cours" && !travBloque(d.travail))));
   function travailBadge(d) { const t = d.travail; return t && TRAV[t.statut] ? '<span class="trav trav-' + esc(t.statut) + '">' + esc(TRAV[t.statut]) + "</span>" : ""; }
   function travailHtml(d) {
     const t = d.travail; if (!t || !TRAV[t.statut]) return "";
@@ -234,6 +238,7 @@
     const quand = t.at ? fmt(t.at, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
     let body = "";
     if (t.statut === "demande") body = "<p><b>Demandé à " + esc(t.prof || "Margaux") + "</b>" + (quand ? ' <span class="meta">' + esc(quand) + "</span>" : "") + "</p><p class=\"hint\">Margaux le confie au prof à son prochain passage (une fois par heure). Tu peux fermer l'appli.</p>" + '<button class="btn sm" type="button" data-trav-annule>Annuler la demande</button>';
+    else if (t.statut === "en_cours" && travBloque(t)) body = "<p><b>Pas de nouvelles depuis plus de 3 h.</b></p><p class=\"hint\">Le travail semble bloqué : tu peux le relancer avec « Travailler dessus », ou passer par le bureau de Margaux.</p>";
     else if (t.statut === "en_cours") body = "<p><b>" + esc(t.prof || "Le prof") + " y travaille.</b></p><p class=\"hint\">Le rendu arrivera ici.</p>";
     else if (t.statut === "pret") body = "<p><b>Rendu prêt</b>" + (t.maj ? ' <span class="meta">' + esc(fmt(t.maj, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })) + "</span>" : "") + "</p>" + (t.resume ? '<p class="pre">' + esc(t.resume) + "</p>" : "") + (t.rendu ? '<p class="hint">Dans le coffre : <code>' + esc(t.rendu) + "</code></p>" : "") + '<p class="hint">Pour un travail noté, c\'est une base que tu retravailles toi-même.</p>';
     else if (t.statut === "erreur") body = "<p><b>Le travail n'a pas pu être fait.</b></p>" + (t.erreur ? '<p class="hint">' + esc(t.erreur) + "</p>" : "") + '<p class="hint">Relance avec « Travailler dessus », ou passe par le bureau de Margaux.</p>';
@@ -292,15 +297,20 @@
     const rd = { devoir: d, matiere: d.matiere };
     bindSamuel($("#dv-detail"), rd, rDevoir);
     const demandeTxt = (st) => "Margaux, je veux avancer sur le devoir « " + d.titre + " »" + (d.code ? " (" + d.code + ")" : "") + (attribue === "Margaux" ? " avec toi" : " avec " + attribue) + ", à l'écrit, " + (st === "doux" ? 15 : 20) + " minutes. " + (st ? "" : "Commence par un résumé de la consigne et de ce qui est déjà fait, puis propose le premier pas de 20 minutes.");
+    const demandeNeutre = () => "Avancer sur le devoir « " + d.titre + " »" + (d.code ? " (" + d.code + ")" : "") + " : premier rendu à partir de la consigne et des documents.";
     // Travailler dessus : la demande est déposée dans le document (file d'attente) ; la routine de Margaux la traite
     $("#dv-detail [data-work]").addEventListener("click", () => {
       if (travActif(d)) return;
-      const st = samStyle(rd), consigne = st ? samuelPlan(rd, st).consigne : null, prof = attribue;
-      save((doc) => { const x = doc.devoirs.find((y) => y.id === d.id); if (x) { x.travail = { id: uid(), statut: "demande", style: st || null, consigne, demande: demandeTxt(st), prof, at: now(), maj: now() }; x.maj = now(); } });
-      forgetSamuel(); rDevoir(); toast("Demandé à " + prof + " : le rendu arrivera dans la fiche");
+      const st = samStyle(rd), prof = attribue; let deja = false;
+      save((doc) => {
+        const x = doc.devoirs.find((y) => y.id === d.id); if (!x) return;
+        if (travActif(x)) { deja = true; return; } // déjà demandé depuis un autre appareil : on ne remplace rien
+        x.travail = { id: uid(), statut: "demande", style: st || null, consigne: null, demande: demandeNeutre(), prof, at: now(), maj: now() }; x.maj = now();
+      });
+      forgetSamuel(); rDevoir(); toast(deja ? "Déjà demandé depuis un autre appareil" : "Demandé à " + prof + " : le rendu arrivera dans la fiche");
     });
     const an = $("#dv-detail [data-trav-annule]");
-    if (an) an.addEventListener("click", () => save((doc) => { const x = doc.devoirs.find((y) => y.id === d.id); if (x && x.travail && x.travail.statut === "demande") { x.travail.statut = "annule"; x.travail.style = null; x.travail.consigne = null; x.travail.maj = now(); x.maj = now(); } }));
+    if (an) an.addEventListener("click", () => save((doc) => { const x = doc.devoirs.find((y) => y.id === d.id); if (x && x.travail && x.travail.statut === "demande") { x.travail.statut = "annule"; x.travail.style = null; x.travail.maj = now(); x.maj = now(); } }));
     // secours : l'ancien parcours (copie de la demande + ouverture du bureau de Margaux)
     $("#dv-detail [data-bureau]").addEventListener("click", () => { const st = samStyle(rd); const txt = withSamuel(rd, demandeTxt(st)); forgetSamuel(); rDevoir(); ask(txt); });
   }
