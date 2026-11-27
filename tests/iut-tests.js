@@ -76,7 +76,8 @@ const VIEWS = ["accueil", "edt", "devoirs", "contacts", "profs", "seances", "ide
     await cockpitConnect(page); await page.goto(BASE + "iut/#idees");
     await until(async () => (await page.textContent("#sync-t")) === "À jour");
     await page.fill("#id-text", "Idée de test"); await page.click("#id-form button[type=submit]");
-    check("idée écrite dans le dépôt (academie.json)", await until(() => mock.json("academie.json").idees.some((i) => i.texte === "Idée de test" && i.statut === "nouveau" && /^[a-z0-9]{8}$/.test(i.id))));
+    check("idée écrite dans le dépôt (academie.json), marquée app: iut", await until(() => mock.json("academie.json").idees.some((i) => i.texte === "Idée de test" && i.statut === "nouveau" && i.app === "iut" && /^[a-z0-9]{8}$/.test(i.id))));
+    check("idées de l'Académie (sans app) absentes de l'appli IUT", (await page.locator("#id-list .idea").count()) === 1);
     check("commit « app : academie »", mock.commits.some((c) => c.message === "app : academie"));
     await page.evaluate(() => (location.hash = "seances")); await page.click("#se-add-open");
     check("séances : seule la matière IUT est proposée", (await page.locator("#se-mat option").count()) === 1);

@@ -1,5 +1,6 @@
 /* Académie · service worker (portée : academie/). Met l'app en cache pour l'ouvrir sans réseau.
- * L'API GitHub ne passe jamais par le cache. Nouvelle version : changer VERSION. */
+ * L'API GitHub ne passe jamais par le cache. Nouvelle version : changer VERSION.
+ * L'appli IUT réutilise academie/app.js et styles.css : un changement de ces fichiers oblige AUSSI à changer VERSION dans iut/sw.js. */
 const VERSION = "academie-0.6.0";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "manifest.webmanifest", "../merge.js", "../store.js", "../fonts/bricolage.woff2", "../fonts/dmsans.woff2", "../icons/icon-192.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting())); });

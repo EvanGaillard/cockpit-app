@@ -60,7 +60,7 @@ const VIEWS = ["accueil", "profs", "matieres", "seances", "idees", "reglages"];
     await cockpitConnect(page); await page.goto(BASE + "academie/#idees");
     await until(async () => (await page.textContent("#sync-t")) === "À jour");
     await page.fill("#id-text", "Idée de test"); await page.click("#id-form button[type=submit]");
-    check("idée écrite dans le dépôt (academie.json)", await until(() => mock.json("academie.json").idees.some((i) => i.texte === "Idée de test" && i.statut === "nouveau" && /^[a-z0-9]{8}$/.test(i.id))));
+    check("idée écrite dans le dépôt (academie.json)", await until(() => mock.json("academie.json").idees.some((i) => i.texte === "Idée de test" && !i.app && i.statut === "nouveau" && /^[a-z0-9]{8}$/.test(i.id))));
     check("commit « app : academie »", mock.commits.some((c) => c.message === "app : academie"));
     await page.evaluate(() => (location.hash = "seances")); await page.click("#se-add-open");
     await page.selectOption("#se-mat", "darija"); await page.fill("#se-bilan", "Cinq mots (test)"); await page.click("#se-form button[type=submit]");

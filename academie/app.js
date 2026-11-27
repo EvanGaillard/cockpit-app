@@ -71,7 +71,12 @@
   const personne = (id) => PERSONNES.find((x) => x.id === id) || null;
   const roleDe = (pp) => (pp.matiere ? mat(pp.matiere).nom.split(" · ")[0] : IUT && pp.id === "margaux" ? "Référente IUT et entreprise" : pp.role);
   const couleurDe = (pp) => (pp.matiere ? col(mat(pp.matiere).couleur) : pp.id === "samuel" ? "#B9D3E6" : "#CFE5D6");
-  const msgs = (pid) => (Array.isArray(A.messages) ? A.messages : []).filter((m) => m && m.prof === pid).sort((a, b) => (a.at || "").localeCompare(b.at || ""));
+  // Pro et perso séparés : séances par matière ; idées et messages créés dans l'appli IUT portent app: "iut" (une réponse suit son message).
+  const estIut = (x) => !!x && x.app === "iut";
+  const pourMoi = (x) => (IUT ? estIut(x) : !estIut(x));
+  const seancesIci = () => (A.seances || []).filter((x) => x && (IUT ? x.matiere === "iut" : x.matiere !== "iut"));
+  function msgIci(m, all) { if (m.reponseA) { const o = all.find((y) => y.id === m.reponseA); if (o) return pourMoi(o); } return pourMoi(m); }
+  const msgs = (pid) => { const all = Array.isArray(A.messages) ? A.messages : []; return all.filter((m) => m && m.prof === pid && (pid !== "margaux" || msgIci(m, all))).sort((a, b) => (a.at || "").localeCompare(b.at || "")); };
   // « vu » : confort propre à l'appareil (navigateur), jamais dans le dépôt
   const vuGet = (pid) => { try { return localStorage.getItem("acad-vu:" + pid) || ""; } catch (e) { return ""; } };
   const vuSet = (pid, iso) => { try { localStorage.setItem("acad-vu:" + pid, iso); } catch (e) { /* sans stockage, pas de pastille */ } };
@@ -392,7 +397,7 @@
   function openSeance(mid) { const f = $("#se-form"); f.hidden = false; fillMatSelect($("#se-mat"), mid || "philo"); $("#se-bilan").focus(); }
 
   function rSeances() {
-    const list = (A.seances || []).slice().sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    const list = seancesIci().sort((a, b) => (b.date || "").localeCompare(a.date || ""));
     $("#se-list").innerHTML = list.length ? list.map((s) => { const m = mat(s.matiere); return '<div class="card se" style="--c:' + esc(col(m.couleur)) + '"><div class="se-top"><span class="chip" style="background:' + esc(col(m.couleur)) + '">' + esc(m.nom.split(" · ")[0]) + "</span><span class=\"meta\">" + esc(fdate(s.date)) + " · " + esc(s.prof || m.prof) + " · " + (s.mode === "oral" ? "oral" : "écrit") + (s.duree ? " · " + esc(s.duree) + " min" : "") + "</span></div>" + (s.bilan ? "<p>" + esc(s.bilan) + "</p>" : "") + (s.suite ? '<p class="hint"><b>Ensuite :</b> ' + esc(s.suite) + "</p>" : "") + (s.note ? '<p class="hint">Note : <code>' + esc(s.note) + "</code></p>" : "") + "</div>"; }).join("") : '<p class="empty">Pas encore de séance. La première, c\'est 20 minutes avec Nour ?</p>';
   }
 
@@ -424,7 +429,7 @@
     const th = $("#pf-thread"); th.scrollTop = th.scrollHeight;
     $("#pf-form").addEventListener("submit", (e) => {
       e.preventDefault(); const texte = $("#pf-text").value.trim(); if (!texte) return;
-      save((d) => d.messages.push({ id: uid(), prof: pp.id, de: "evan", texte, at: now(), statut: "envoye", maj: now() }));
+      save((d) => d.messages.push(Object.assign({ id: uid(), prof: pp.id, de: "evan", texte, at: now(), statut: "envoye", maj: now() }, IUT ? { app: "iut" } : {})));
       toast("Envoyé à " + pp.nom + " : réponse dans l'heure");
     });
     $$("#pf-thread [data-renvoi]").forEach((b) => b.addEventListener("click", () => save((d) => { const x = d.messages.find((y) => y.id === b.dataset.renvoi); if (x && x.statut === "erreur") { x.statut = "envoye"; x.maj = now(); } })));
@@ -437,7 +442,7 @@
   }
 
   function rIdees() {
-    const list = (A.idees || []).slice().sort((a, b) => (b.created || "").localeCompare(a.created || ""));
+    const list = (A.idees || []).filter(pourMoi).sort((a, b) => (b.created || "").localeCompare(a.created || ""));
     const ST = { nouveau: "Reçue", pris: "Prise en charge", fait: "Faite", refuse: "Écartée" };
     $("#id-list").innerHTML = list.length ? list.map((i) => '<div class="card idea"><p>' + esc(i.texte) + '</p><span class="meta">' + esc(fdate(i.created)) + " · " + esc(ST[i.statut] || "Reçue") + (i.reponse ? " · " + esc(i.reponse) : "") + "</span></div>").join("") : '<p class="empty">Aucune idée pour l\'instant.</p>';
   }
@@ -455,11 +460,19 @@
   function saveIut(mut) { const d = S.get("iut") || {}; if (!d.edt) d.edt = {}; if (!Array.isArray(d.contacts)) d.contacts = []; mut(d); d.maj = now(); I = d; S.set("iut", d); render(); }
   // ICS → [{id, debut "AAAA-MM-JJTHH:MM" (heure de Paris), fin, jour (toute la journée), titre, lieu, desc}]
   function parisParts(dt) { const f = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(dt); const g = (t) => (f.find((x) => x.type === t) || {}).value; return g("year") + "-" + g("month") + "-" + g("day") + "T" + (g("hour") === "24" ? "00" : g("hour")) + ":" + g("minute"); }
+  function zoneVersUtc(y, mo, d, h, mi, tz) { // heure « murale » d'un fuseau IANA → instant UTC (deux passes suffisent)
+    try {
+      const off = (t) => { const f = new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).formatToParts(new Date(t)); const g = (k) => +(f.find((x) => x.type === k) || {}).value; return Date.UTC(g("year"), g("month") - 1, g("day"), g("hour") % 24, g("minute"), g("second")) - t; };
+      const w = Date.UTC(y, mo - 1, d, h, mi); let t = w - off(w); t = w - off(t); return new Date(t);
+    } catch (e) { return null; }
+  }
   function icsDate(v, params) {
     const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?$/.exec(v || ""); if (!m) return null;
-    if (!m[4] || /VALUE=DATE/.test(params || "")) return { iso: m[1] + "-" + m[2] + "-" + m[3] + "T00:00", jour: true };
+    if (!m[4] || /(^|;)VALUE=DATE(;|$)/i.test(params || "")) return { iso: m[1] + "-" + m[2] + "-" + m[3] + "T00:00", jour: true };
     if (m[7]) return { iso: parisParts(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)))) };
-    return { iso: m[1] + "-" + m[2] + "-" + m[3] + "T" + m[4] + ":" + m[5] }; // heure locale (TZID=Europe/Paris) prise telle quelle
+    const tz = (/(?:^|;)TZID=("?)([^;:"]+)\1/i.exec(params || "") || [])[2];
+    if (tz && tz !== "Europe/Paris") { const u = zoneVersUtc(+m[1], +m[2], +m[3], +m[4], +m[5], tz); if (u) return { iso: parisParts(u) }; }
+    return { iso: m[1] + "-" + m[2] + "-" + m[3] + "T" + m[4] + ":" + m[5] }; // heure de Paris (ou fuseau inconnu) prise telle quelle
   }
   const icsText = (v) => String(v || "").replace(/\\n/gi, "\n").replace(/\\([,;\\])/g, "$1").trim();
   function parseICS(text) {
@@ -476,10 +489,12 @@
       else if (name === "DTEND") { const d = icsDate(val.trim(), params); if (d) ev.fin = d.iso; }
       else if (name === "SUMMARY") ev.titre = icsText(val);
       else if (name === "LOCATION") ev.lieu = icsText(val);
-      else if (name === "DESCRIPTION") ev.desc = icsText(val).slice(0, 300);
+      else if (name === "DESCRIPTION") ev.desc = icsText(val).replace(/\(\s*Export(?:é|e)(?:e)?s?\s*le\s*:[^)]*\)/gi, "").replace(/\(\s*Exported\s*:[^)]*\)/gi, "").trim().slice(0, 300); // ADE ajoute la date d'export à chaque lecture
+      else if (name === "RECURRENCE-ID") ev.rec = val.trim();
       else if (name === "STATUS" && /CANCELLED/i.test(val)) ev.annule = true;
     }
-    return out.map((e) => Object.assign({ id: e.id || e.debut + "|" + (e.titre || "") }, e)).sort((a, b) => a.debut.localeCompare(b.debut));
+    const seen = new Set();
+    return out.map((e) => { const o = Object.assign({}, e); let id = (e.id || e.debut + "|" + (e.titre || "")) + (e.rec ? "|" + e.rec : ""); if (seen.has(id)) id += "|" + e.debut; seen.add(id); o.id = id; delete o.rec; return o; }).sort((a, b) => a.debut.localeCompare(b.debut));
   }
   function fenetre(evs) { const a = keyAdd(today(), -1), b = keyAdd(today(), 70); return evs.filter((e) => e.debut.slice(0, 10) >= a && e.debut.slice(0, 10) <= b); }
   function keyAdd(k, n) { const d = new Date(k + "T12:00:00"); d.setDate(d.getDate() + n); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
@@ -495,7 +510,7 @@
       const evs = fenetre(parseICS(txt));
       edtErr = null; edtLu = now();
       const same = self.CockpitMerge.equal(evs, (I.edt || {}).events || []); // comparaison sans tenir compte de l'ordre des champs
-      if (!same || (I.edt || {}).erreur) saveIut((d) => { d.edt.events = evs; d.edt.lu = edtLu; d.edt.source = "appli"; d.edt.erreur = null; });
+      if (!same) saveIut((d) => { d.edt.events = evs; d.edt.lu = edtLu; d.edt.source = "appli"; }); // `erreur` appartient à la routine : l'appli n'y touche pas
       else if (view === "edt" || view === "accueil") render();
     } catch (e) {
       edtErr = "L'appli n'a pas pu lire le lien directement (" + (e && e.message ? e.message : "réseau") + ") : la copie faite par Margaux chaque heure est affichée.";
@@ -503,7 +518,8 @@
     } finally { edtBusy = false; }
   }
   // changements depuis la dernière consultation (repère gardé sur l'appareil, jamais dans le dépôt)
-  const sig = (e) => [e.debut, e.fin, e.titre, e.lieu, e.annule ? 1 : 0].join("|");
+  const sig = (e) => JSON.stringify([e.debut, e.fin || null, e.titre || "", e.lieu || "", e.annule ? 1 : 0]);
+  const unsig = (x) => { try { const a = JSON.parse(x); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
   function vuEdt() { try { return JSON.parse(localStorage.getItem("acad-edt-vu") || "null"); } catch (e) { return null; } }
   function setVuEdt(evs) { try { const o = {}; evs.forEach((e) => (o[e.id] = sig(e))); localStorage.setItem("acad-edt-vu", JSON.stringify(o)); } catch (e) { /* sans stockage : pas de repère */ } }
   // à l'ouverture de l'onglet : les changements sont montrés pendant cette visite, puis comptent comme vus
@@ -519,7 +535,7 @@
     const vu = vuEdt(); if (!vu) return { etat: {}, supprimes: [] };
     const etat = {}; evs.forEach((e) => { if (!(e.id in vu)) etat[e.id] = "nouveau"; else if (vu[e.id] !== sig(e)) etat[e.id] = "modifie"; });
     const ids = new Set(evs.map((e) => e.id)), t = today();
-    const supprimes = Object.keys(vu).filter((id) => !ids.has(id) && (vu[id].slice(0, 10) >= t)).map((id) => ({ id, debut: vu[id].split("|")[0], titre: vu[id].split("|")[2] }));
+    const supprimes = Object.keys(vu).map((id) => ({ id, a: unsig(vu[id]) })).filter((x) => !ids.has(x.id) && typeof x.a[0] === "string" && x.a[0].slice(0, 10) >= t).map((x) => ({ id: x.id, debut: x.a[0], titre: x.a[2] }));
     return { etat, supprimes };
   }
   const hm = (iso) => (iso ? iso.slice(11, 16).replace(":", " h ") : "");
@@ -558,7 +574,7 @@
   // ---------- IUT : contacts ----------
   const CATS = { enseignant: "Enseignants", scolarite: "Scolarité et secrétariat", sante: "Santé et handicap", entreprise: "Entreprise et alternance", autre: "Autres" };
   const telHref = (t) => { const v = String(t || "").replace(/[^\d+]/g, ""); return /^\+?\d{6,15}$/.test(v) ? "tel:" + v : null; };
-  const mailHref = (m) => (/^[^\s@<>"']+@[^\s@<>"']+\.[a-z]{2,}$/i.test(String(m || "").trim()) ? "mailto:" + String(m).trim() : null);
+  const mailHref = (m) => (/^[^\s@<>"'?&]+@[^\s@<>"'?&]+\.[a-z]{2,}$/i.test(String(m || "").trim()) ? "mailto:" + String(m).trim() : null);
   let ctEdit = null, ctQ = "";
   function rContacts() {
     const q = ctQ.trim().toLowerCase();
@@ -597,7 +613,7 @@
       if (u && !/^https:\/\//.test(u)) { toast("Le lien doit commencer par https:// ou webcal://"); return; }
       const change = u !== ((I.edt || {}).url || "");
       if (change) { edtLu = null; edtErr = null; }
-      saveIut((d) => { d.edt.url = u || null; if (change) { d.edt.erreur = null; d.edt.lu = null; } if (!u) d.edt.events = []; });
+      saveIut((d) => { d.edt.url = u || null; if (change) d.edt.lu = null; if (!u) d.edt.events = []; });
       toast(u ? "Lien enregistré : lecture de l'emploi du temps…" : "Lien retiré"); if (u) edtRefresh(true);
     });
   }
@@ -630,7 +646,7 @@
     on("#id-form", "submit", (e) => {
       e.preventDefault();
       const texte = $("#id-text").value.trim(); if (!texte) return;
-      save((d) => d.idees.push({ id: uid(), texte, created: now(), statut: "nouveau", maj: now() }));
+      save((d) => d.idees.push(Object.assign({ id: uid(), texte, created: now(), statut: "nouveau", maj: now() }, IUT ? { app: "iut" } : {})));
       e.target.reset(); toast("Idée envoyée à Margaux");
     });
     $("#set-import").addEventListener("click", async () => { $("#set-msg").textContent = "…"; const r = await S.useSettingsFrom("cockpit-app"); $("#set-msg").textContent = r.ok ? "Réglages repris du Cockpit." : r.text; rReglages(); });
