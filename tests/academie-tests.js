@@ -40,7 +40,7 @@ const VIEWS = ["accueil", "devoirs", "matieres", "seances", "idees", "reglages"]
     const slug = label.split(" ")[0];
     for (const v of VIEWS) { await page.evaluate((h) => (location.hash = h), v); await page.waitForTimeout(150); check(label + " : pas de défilement horizontal · " + v, await noH(page)); await page.screenshot({ path: path.join(SHOTS, slug + "-" + v + ".png"), fullPage: true }); }
     await page.evaluate(() => (location.hash = "matieres"));
-    check(label + " : 13 matières", (await page.locator(".mat").count()) === 13);
+    check(label + " : 13 matières, 12 en attente (seule la philo est active)", (await page.locator(".mat").count()) === 13 && (await page.locator(".mat.off").count()) === 12);
     await ctx.close();
   }
   { // écritures (ordinateur)
@@ -53,10 +53,10 @@ const VIEWS = ["accueil", "devoirs", "matieres", "seances", "idees", "reglages"]
     check("commit « app : academie »", mock.commits.some((c) => c.message === "app : academie"));
     await page.evaluate(() => (location.hash = "seances")); await page.click("#se-add-open");
     await page.selectOption("#se-mat", "darija"); await page.fill("#se-bilan", "Cinq mots (test)"); await page.click("#se-form button[type=submit]");
-    check("séance écrite dans le dépôt", await until(() => mock.json("academie.json").seances.some((s) => s.matiere === "darija" && s.prof === "Yasmine" && s.bilan === "Cinq mots (test)")));
+    check("séance écrite dans le dépôt", await until(() => mock.json("academie.json").seances.some((s) => s.matiere === "darija" && s.prof === "Margaux" && s.bilan === "Cinq mots (test)")));
     await page.evaluate(() => (location.hash = "devoirs")); await page.click("#dv-add-open");
     await page.fill("#dv-titre", "Devoir de test"); await page.selectOption("#dv-mat", "energie"); await page.click("#dv-form button[type=submit]");
-    check("devoir ajouté et attribué au bon prof", await until(() => mock.json("academie.json").devoirs.some((d) => d.titre === "Devoir de test" && d.prof === "Étienne" && d.statut === "nouveau")));
+    check("devoir d'une matière en attente : confié à Margaux", await until(() => mock.json("academie.json").devoirs.some((d) => d.titre === "Devoir de test" && d.prof === "Margaux" && d.statut === "nouveau")));
     // statut changé + écriture concurrente d'une routine (Margaux) : rien n'est perdu
     mock.beforePut = () => mock.external("academie.json", (d) => d.devoirs.push({ id: "dvroutin", titre: "Ajouté par Odile", matiere: "iut", prof: "Victor", statut: "attribue", created: "2026-11-27T10:00:00Z", maj: "2026-11-27T10:00:00Z" }));
     await page.selectOption('[data-st="dv000002"]', "premier_rendu");

@@ -21,7 +21,7 @@
 
   // Matières par défaut (cadrage du 27/11/2026). Le document peut les compléter ou les modifier (même id).
   const BASE_MATS = [
-    { id: "philo", nom: "Philosophie", prof: "Nour", couleur: "#F2A7C3", maison: "Chalet-bibliothèque", ordre: 1 },
+    { id: "philo", nom: "Philosophie", prof: "Nour", couleur: "#F2A7C3", maison: "Chalet-bibliothèque", ordre: 1, actif: true },
     { id: "iut", nom: "IUT · maths, physique, métrologie", prof: "Victor", couleur: "#8FB8E8", maison: "Observatoire", ordre: 2 },
     { id: "anglais", nom: "Anglais", prof: "Ingrid", couleur: "#F2C66D", maison: "Maison anglaise", ordre: 3 },
     { id: "darija", nom: "Darija", prof: "Yasmine", couleur: "#E89A6B", maison: "Riad", ordre: 4 },
@@ -46,6 +46,9 @@
     (A.matieres || []).forEach((m) => { if (m && m.id) byId[m.id] = Object.assign({}, byId[m.id] || {}, m); });
     return Object.values(byId).sort((a, b) => (a.ordre || 99) - (b.ordre || 99));
   }
+  // Équipe active (décision d'Evan du 27/11) : Nour seulement. Un document peut activer une matière (actif: true).
+  const actif = (m) => m.actif === true;
+  const profDe = (m) => (actif(m) ? m.prof : "Margaux"); // prof pas encore arrivé : Margaux s'en charge
   const mat = (id) => mats().find((m) => m.id === id) || { id, nom: id || "Sans matière", prof: "Margaux", couleur: "#CBD2D9" };
 
   function save(mut) {
@@ -67,14 +70,14 @@
     const p = A.prochaine;
     if (p && p.matiere && p.date && days(p.date, t) <= 2) return { kind: "margaux", matiere: p.matiere, titre: "Séance proposée par Margaux", raison: p.raison || "" };
     // matière délaissée : la plus longtemps sans séance, la philo d'abord à égalité (priorité n°1)
-    const list = mats().filter((m) => m.id !== "sport").map((m) => ({ m, last: lastSeance(m.id) }));
+    const list = mats().filter((m) => m.id !== "sport" && actif(m)).map((m) => ({ m, last: lastSeance(m.id) }));
     list.sort((a, b) => (a.last || "0000") .localeCompare(b.last || "0000") || (a.m.ordre - b.m.ordre));
     const pick = list[0];
     return { kind: "delaissee", matiere: pick.m.id, titre: "Une séance de " + pick.m.nom.split(" · ")[0].toLowerCase(), raison: pick.last ? "Dernière séance il y a " + days(pick.last, t) + " j." : "Pas encore de séance : on commence en douceur, 20 minutes." };
   }
   function seancePrompt(r, mode) {
     const m = mat(r.matiere);
-    return "Margaux, lance une séance de " + m.nom + " avec " + m.prof + ", à l'" + (mode === "oral" ? "oral" : "écrit") + ", 20 minutes. " + (r.kind === "devoir" ? "Sujet : le devoir « " + r.titre + " ». " : "") + "Commence par un petit résumé de là où j'en suis, puis termine par un bilan, la prochaine étape et la note de suivi dans Obsidian.";
+    return "Margaux, lance une séance de " + m.nom + " avec " + profDe(m) + ", à l'" + (mode === "oral" ? "oral" : "écrit") + ", 20 minutes. " + (r.kind === "devoir" ? "Sujet : le devoir « " + r.titre + " ». " : "") + "Commence par un petit résumé de là où j'en suis, puis termine par un bilan, la prochaine étape et la note de suivi dans Obsidian.";
   }
 
   // ---------- rendu ----------
@@ -91,7 +94,7 @@
     $("#greet").textContent = (h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir") + " Evan · Margaux et l'équipe";
     const r = recommend(), m = mat(r.matiere);
     $("#reco").innerHTML = '<div class="card reco" style="--c:' + esc(col(m.couleur)) + '">' +
-      '<div class="reco-top"><span class="chip" style="background:' + esc(col(m.couleur)) + '">' + esc(m.nom.split(" · ")[0]) + '</span><span class="who">avec ' + esc(m.prof) + '</span></div>' +
+      '<div class="reco-top"><span class="chip" style="background:' + esc(col(m.couleur)) + '">' + esc(m.nom.split(" · ")[0]) + '</span><span class="who">avec ' + esc(r.kind === "devoir" && r.devoir.prof ? r.devoir.prof : profDe(m)) + '</span></div>' +
       '<h1>' + esc(r.titre) + '</h1><p class="why">' + esc(r.raison) + '</p>' +
       '<div class="row"><button class="btn primary" type="button" data-start="oral">Commencer à l\'oral</button><button class="btn" type="button" data-start="ecrit">À l\'écrit</button><button class="btn ghost" type="button" data-done>J\'ai fait une séance</button></div>' +
       '<p class="hint">« Commencer » copie la demande pour Margaux et ouvre son bureau : colle-la, ou dis-la au micro.</p></div>';
@@ -141,7 +144,7 @@
     $("#mats").innerHTML = mats().map((m) => {
       const ss = (A.seances || []).filter((s) => s.matiere === m.id), last = ss.map((s) => s.date).sort().pop();
       const open = (A.devoirs || []).filter((d) => d.matiere === m.id && OPEN(d)).length;
-      return '<div class="mat" style="--c:' + esc(col(m.couleur)) + '"><span class="sw"></span><div><b>' + esc(m.nom) + '</b><span class="meta">' + esc(m.prof) + " · " + esc(m.maison || "") + '</span><span class="meta">' + (ss.length ? ss.length + " séance" + (ss.length > 1 ? "s" : "") + " · dernière il y a " + days(last.slice(0, 10), t) + " j" : "pas encore de séance") + (open ? " · " + open + " devoir" + (open > 1 ? "s" : "") : "") + "</span></div></div>";
+      return '<div class="mat' + (actif(m) ? "" : " off") + '" style="--c:' + esc(col(m.couleur)) + '"><span class="sw"></span><div><b>' + esc(m.nom) + '</b><span class="meta">' + (actif(m) ? esc(m.prof) + " · " + esc(m.maison || "") : esc(m.prof) + " arrive bientôt · en attendant, Margaux") + '</span><span class="meta">' + (ss.length ? ss.length + " séance" + (ss.length > 1 ? "s" : "") + " · dernière il y a " + days(last.slice(0, 10), t) + " j" : "pas encore de séance") + (open ? " · " + open + " devoir" + (open > 1 ? "s" : "") : "") + "</span></div></div>";
     }).join("");
   }
 
@@ -178,15 +181,15 @@
       e.preventDefault();
       const titre = $("#dv-titre").value.trim(); if (!titre) return;
       const m = mat($("#dv-mat").value);
-      save((d) => d.devoirs.push({ id: uid(), titre, matiere: m.id, prof: m.prof, due: $("#dv-due").value || null, source: "app", docs: $("#dv-docs").value.trim(), statut: "nouveau", created: now(), maj: now() }));
-      e.target.reset(); $("#dv-form").hidden = true; toast("Devoir ajouté : Odile le confie à " + m.prof);
+      save((d) => d.devoirs.push({ id: uid(), titre, matiere: m.id, prof: profDe(m), due: $("#dv-due").value || null, source: "app", docs: $("#dv-docs").value.trim(), statut: "nouveau", created: now(), maj: now() }));
+      e.target.reset(); $("#dv-form").hidden = true; toast("Devoir ajouté : Odile le confie à " + profDe(m));
     });
     $("#se-add-open").addEventListener("click", () => openSeance());
     $("#se-cancel").addEventListener("click", () => ($("#se-form").hidden = true));
     $("#se-form").addEventListener("submit", (e) => {
       e.preventDefault();
       const m = mat($("#se-mat").value);
-      save((d) => d.seances.push({ id: uid(), date: now(), matiere: m.id, prof: m.prof, mode: $("#se-mode").value, duree: Number($("#se-duree").value) || 20, bilan: $("#se-bilan").value.trim(), suite: $("#se-suite").value.trim(), maj: now() }));
+      save((d) => d.seances.push({ id: uid(), date: now(), matiere: m.id, prof: profDe(m), mode: $("#se-mode").value, duree: Number($("#se-duree").value) || 20, bilan: $("#se-bilan").value.trim(), suite: $("#se-suite").value.trim(), maj: now() }));
       e.target.reset(); $("#se-form").hidden = true; toast("Séance notée. Bravo.");
     });
     $("#id-form").addEventListener("submit", (e) => {
