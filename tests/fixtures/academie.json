@@ -36,6 +36,107 @@
    "source": "app",
    "statut": "rendu",
    "titre": "Devoir rendu (exemple)"
+  },
+  {
+   "agenda": {
+    "raison": "date à vérifier",
+    "statut": "aucun"
+   },
+   "code": "R5.06",
+   "consigne": null,
+   "consigneSource": "Sujet sur le PC, résumé demandé à Sami (simulation)",
+   "created": "2026-11-27T10:00:00Z",
+   "documents": [
+    {
+     "chemin": "Documents\\IUT\\Module simulé\\Projet\\Projet_Simulation_Nom_De_Fichier_Tres_Long_Sans_Espaces_2026_2027.pdf",
+     "id": "doc00001",
+     "nom": "Projet_Simulation_Nom_De_Fichier_Tres_Long_Sans_Espaces_2026_2027.pdf",
+     "ou": "pc",
+     "type": "sujet"
+    },
+    {
+     "chemin": "Documents\\IUT\\Module simulé\\Projet\\sujet-general-simule.pdf",
+     "id": "doc00002",
+     "nom": "sujet-general-simule.pdf",
+     "ou": "pc",
+     "type": "sujet"
+    },
+    {
+     "chemin": "Documents\\IUT\\Module simulé\\Projet\\Exemples\\exemple-tableau-simule.xlsm",
+     "id": "doc00003",
+     "nom": "exemple-tableau-simule.xlsm",
+     "ou": "pc",
+     "type": "exemple"
+    },
+    {
+     "id": "doc00004",
+     "lien": "https://moodle.example.invalid/mod/resource/view.php?id=2",
+     "nom": "annale-simulee.pdf",
+     "ou": "moodle",
+     "type": "annale"
+    },
+    {
+     "id": "doc00005",
+     "lien": "javascript:alert(1)",
+     "nom": "lien piégé (test)",
+     "ou": "drive",
+     "type": "autre"
+    }
+   ],
+   "due": null,
+   "echeances": [
+    {
+     "date": "2026-10-26",
+     "heure": "13:30",
+     "id": "ech00001",
+     "libelle": "Dépôt Moodle (date générale du cours)",
+     "pour": "tous",
+     "source": "Moodle",
+     "statut": "passee"
+    },
+    {
+     "date": null,
+     "id": "ech00002",
+     "libelle": "Rendu pour les alternants",
+     "pour": "alternants",
+     "source": "à demander à l'enseignante",
+     "statut": "a_verifier"
+    }
+   ],
+   "id": "dvsim506",
+   "maj": "2026-11-27T10:00:00Z",
+   "matiere": "iut",
+   "moodle": "https://moodle.example.invalid/course/view.php?id=1",
+   "prof": "Margaux",
+   "questions": [
+    {
+     "id": "q0000001",
+     "pour": "margaux",
+     "statut": "ouverte",
+     "texte": "Quelle est la date de rendu pour les alternants ?"
+    },
+    {
+     "id": "q0000002",
+     "pour": "sami",
+     "statut": "ouverte",
+     "texte": "Résumer le sujet (Projet_Simulation_Nom_De_Fichier_Tres_Long_Sans_Espaces_2026_2027.pdf) en 5 lignes"
+    }
+   ],
+   "source": "moodle",
+   "statut": "attribue",
+   "suivi": "Apprendre/Module simule.md",
+   "titre": "Projet tutoré VBA (simulation)",
+   "type": "projet"
+  },
+  {
+   "created": "2026-11-27T10:00:00Z",
+   "due": null,
+   "id": "dvxss001",
+   "maj": "2026-11-27T10:00:00Z",
+   "matiere": "philo",
+   "prof": "Nour",
+   "statut": "attribue",
+   "titre": "<img src=x onerror=alert(1)> titre piégé"
   }
  ],
  "idees": [

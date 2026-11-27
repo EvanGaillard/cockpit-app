@@ -42,6 +42,26 @@ const VIEWS = ["accueil", "devoirs", "matieres", "seances", "idees", "reglages"]
     check(label + " : recommandation = devoir urgent", await until(async () => /Compte rendu de TP/.test(await page.textContent("#reco"))));
     const slug = label.split(" ")[0];
     for (const v of VIEWS) { await page.evaluate((h) => (location.hash = h), v); await page.waitForTimeout(150); check(label + " : pas de défilement horizontal · " + v, await noH(page)); await page.screenshot({ path: path.join(SHOTS, slug + "-" + v + ".png"), fullPage: true }); }
+    // ---- parcours d'un devoir IUT (données simulées) ----
+    const before = mock.commits.length;
+    await page.evaluate(() => (location.hash = "devoirs"));
+    check(label + " : liste : le projet simulé affiche « date à vérifier »", await until(async () => /Projet tutoré VBA \(simulation\)[\s\S]*date à vérifier/.test(await page.textContent("#dv-list"))));
+    await page.click('#dv-list a[href="#devoir/dvsim506"]');
+    check(label + " : fiche ouverte", await until(async () => /Projet tutoré VBA/.test(await page.textContent("#dv-detail"))));
+    check(label + " : prochaine échéance = « À vérifier »", (await page.textContent("#dv-next")).trim() === "À vérifier");
+    const prof = await page.textContent("#dv-prof");
+    check(label + " : attribué à Margaux, en attendant Victor", /Margaux/.test(prof) && /Victor/.test(prof), prof.trim());
+    check(label + " : agenda laissé intact (date non confirmée)", /Rien dans ton agenda : la date n'est pas confirmée/.test(await page.textContent("#dv-agenda")));
+    check(label + " : 5 documents listés, chemins PC copiables", (await page.locator("#dv-docs .docl").count()) === 5 && (await page.locator("#dv-docs [data-copy]").count()) === 3);
+    check(label + " : lien javascript: neutralisé", (await page.locator('#dv-docs a[href^="javascript"]').count()) === 0 && (await page.locator('#dv-docs a[href^="https://moodle.example.invalid"]').count()) === 1);
+    check(label + " : échéance passée et échéance à vérifier affichées", (await page.locator("#dv-ech .ech-passee").count()) === 1 && (await page.locator("#dv-ech .ech-a_verifier").count()) === 1);
+    check(label + " : questions ouvertes (Margaux, Sami)", /Margaux/.test(await page.textContent("#dv-q")) && /Sami/.test(await page.textContent("#dv-q")));
+    check(label + " : pas de défilement horizontal · fiche devoir", await noH(page));
+    await page.screenshot({ path: path.join(SHOTS, slug + "-devoir.png"), fullPage: true });
+    check(label + " : consulter ne modifie rien dans le dépôt", mock.commits.length === before);
+    await page.evaluate(() => (location.hash = "devoir/dvxss001"));
+    check(label + " : titre piégé affiché comme du texte", await until(async () => (await page.textContent("#dv-detail")).includes("<img src=x onerror=alert(1)>")) && (await page.locator("#dv-detail img").count()) === 0);
+    await page.evaluate(() => (location.hash = "accueil"));
     check(label + " : lien « ← Cockpit » présent", (await page.getAttribute(".back", "href")) === "../");
     await page.evaluate(() => (location.hash = "matieres"));
     check(label + " : 13 matières, 12 en attente (seule la philo est active)", (await page.locator(".mat").count()) === 13 && (await page.locator(".mat.off").count()) === 12);
@@ -68,6 +88,10 @@ const VIEWS = ["accueil", "devoirs", "matieres", "seances", "idees", "reglages"]
     check("l'app affiche le devoir ajouté par la routine", await until(async () => /Ajouté par Odile/.test(await page.textContent("#dv-list"))));
     // le Cockpit n'est pas touché par l'Académie
     check("aucun autre document modifié par l'Académie", mock.commits.filter((c) => /^app : /.test(c.message)).every((c) => c.message === "app : academie"));
+    await page.evaluate(() => (location.hash = "devoir/dvsim506"));
+    await page.waitForSelector("#dv-detail [data-st]");
+    await page.selectOption("#dv-detail [data-st]", "premier_rendu");
+    check("fiche : changer le statut l'écrit dans le dépôt, échéances et documents intacts", await until(() => { const x = mock.json("academie.json").devoirs.find((y) => y.id === "dvsim506"); return x && x.statut === "premier_rendu" && x.echeances.length === 2 && x.documents.length === 5 && x.due === null; }));
     // le jeton n'est jamais recopié dans la base de l'Académie
     const tokInAcad = await page.evaluate(() => new Promise((res) => { const rq = indexedDB.open("academie-app"); rq.onsuccess = () => { const d = rq.result; const r = d.transaction("kv", "readonly").objectStore("kv").get("token"); r.onsuccess = () => res(r.result || null); r.onerror = () => res("err"); }; }));
     check("jeton absent de la base de l'Académie (relu dans le Cockpit)", tokInAcad === null);

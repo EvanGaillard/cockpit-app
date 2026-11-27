@@ -1,12 +1,17 @@
 /* Académie · écrans (lot 1 : socle).
  * Données : document « academie » du dépôt privé (synchro par ../store.js, fusion par ../merge.js).
+ * Devoir (ajouts du lot « devoir IUT », aucun champ renommé) : code, type, consigne, consigneSource, moodle, suivi,
+ *  documents:[{id,nom,type: sujet|consigne|exemple|annale|cours|td|autre, ou: pc|drive|moodle, chemin, lien, note}],
+ *  echeances:[{id,libelle,date,heure,pour: tous|alternants|initiaux,statut: confirmee|a_verifier|passee,source,maj}],
+ *  questions:[{id,texte,pour: margaux|sami|evan,statut: ouverte|repondue,reponse,maj}], agenda:{statut: aucun|cree,raison,maj}.
+ *  Règle : due = date CONFIRMÉE de la prochaine échéance, sinon null ; l'agenda n'est rempli que pour une date confirmée.
  * {maj, bureau, matieres:[{id,nom,prof,couleur,maison,ordre}], devoirs:[{id,titre,matiere,prof,due,source,docs,statut,manque,rendu,tache,created,maj}],
  *  seances:[{id,date,matiere,prof,mode,duree,bilan,suite,note,maj}], idees:[{id,texte,created,statut,reponse,maj}], prochaine:{matiere,raison,date}}
  * Format de référence : tableau des documents du CLAUDE.md du coffre (dépôt privé).
  * L'IA n'est pas dans l'app : les profs travaillent dans le bureau de Margaux et écrivent ce document avec ldata. */
 (function () {
   "use strict";
-  const APP_VERSION = "0.1.1";
+  const APP_VERSION = "0.2.0";
   const S = self.CockpitStore;
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
@@ -39,7 +44,32 @@
   const OPEN = (d) => d.statut !== "rendu" && d.statut !== "annule";
 
   let A = { matieres: [], devoirs: [], seances: [], idees: [] };
-  let view = "accueil", filter = "ouverts";
+  let view = "accueil", filter = "ouverts", current = null;
+
+  // ---------- échéances ----------
+  const ECH = { confirmee: "confirmée", a_verifier: "à vérifier", passee: "passée" };
+  const POUR = { tous: "tout le monde", alternants: "alternants", initiaux: "étudiants en formation initiale" };
+  function echeances(d) {
+    const list = Array.isArray(d.echeances) ? d.echeances.slice() : [];
+    if (!list.length && d.due) list.push({ id: "due", libelle: "Rendu", date: d.due, statut: "confirmee", pour: "tous" });
+    return list;
+  }
+  // prochaine échéance utile : la plus proche date confirmée à venir, sinon une échéance « à vérifier »
+  function prochaine(d) {
+    const t = today(), list = echeances(d).filter((e) => e.statut !== "passee");
+    const conf = list.filter((e) => e.statut === "confirmee" && e.date && e.date >= t).sort((a, b) => a.date.localeCompare(b.date));
+    const conf0 = list.filter((e) => e.statut === "confirmee" && e.date).sort((a, b) => a.date.localeCompare(b.date));
+    return conf[0] || list.find((e) => e.statut === "a_verifier") || conf0[conf0.length - 1] || null;
+  }
+  const aVerifier = (d) => { const e = prochaine(d); return !!(e && e.statut === "a_verifier"); };
+  function echLabel(e) {
+    if (!e) return "sans date";
+    if (e.statut === "a_verifier") return "date à vérifier";
+    const n = days(today(), e.date);
+    return n < 0 ? "en retard de " + -n + " j" : n === 0 ? "aujourd'hui" : n === 1 ? "demain" : fdate(e.date) + (e.heure ? " · " + e.heure : "");
+  }
+  const sortKey = (d) => { const e = prochaine(d); return e ? (e.statut === "a_verifier" ? "0000" : e.date) : "9999"; }; // à vérifier en tête
+  const safeUrl = (u) => (/^https:\/\//.test(u || "") ? u : null);
 
   function mats() {
     const byId = {}; BASE_MATS.forEach((m) => (byId[m.id] = Object.assign({}, m)));
@@ -67,6 +97,8 @@
       const n = days(t, urgent.due);
       return { kind: "devoir", matiere: urgent.matiere, titre: urgent.titre, raison: n < 0 ? "Échéance dépassée de " + -n + " j : on fait le point, sans paniquer." : n === 0 ? "C'est pour aujourd'hui." : "À rendre dans " + n + " j.", devoir: urgent };
     }
+    const flou = (A.devoirs || []).filter(OPEN).find(aVerifier);
+    if (flou) return { kind: "verifier", matiere: flou.matiere, titre: "Date à vérifier : " + flou.titre, raison: "On ne connaît pas encore ta date de rendu. Margaux la cherche ; rien n'est mis dans ton agenda tant qu'elle n'est pas confirmée.", devoir: flou };
     const p = A.prochaine;
     if (p && p.matiere && p.date && days(p.date, t) <= 2) return { kind: "margaux", matiere: p.matiere, titre: "Séance proposée par Margaux", raison: p.raison || "" };
     // matière délaissée : la plus longtemps sans séance, la philo d'abord à égalité (priorité n°1)
@@ -77,16 +109,16 @@
   }
   function seancePrompt(r, mode) {
     const m = mat(r.matiere);
-    return "Margaux, lance une séance de " + m.nom + " avec " + profDe(m) + ", à l'" + (mode === "oral" ? "oral" : "écrit") + ", 20 minutes. " + (r.kind === "devoir" ? "Sujet : le devoir « " + r.titre + " ». " : "") + "Commence par un petit résumé de là où j'en suis, puis termine par un bilan, la prochaine étape et la note de suivi dans Obsidian.";
+    return "Margaux, lance une séance de " + m.nom + " avec " + profDe(m) + ", à l'" + (mode === "oral" ? "oral" : "écrit") + ", 20 minutes. " + (r.devoir ? "Sujet : le devoir « " + r.devoir.titre + " ». " : "") + "Commence par un petit résumé de là où j'en suis, puis termine par un bilan, la prochaine étape et la note de suivi dans Obsidian.";
   }
 
   // ---------- rendu ----------
   function render() {
-    $$(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.v === view));
+    $$(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.v === (view === "devoir" ? "devoirs" : view)));
     $$(".view").forEach((v) => (v.hidden = v.dataset.view !== view));
     const open = (A.devoirs || []).filter(OPEN);
     const b = $("#dv-badge"); b.hidden = !open.length; b.textContent = open.length;
-    ({ accueil: rAccueil, devoirs: rDevoirs, matieres: rMatieres, seances: rSeances, idees: rIdees, reglages: rReglages })[view]();
+    ({ accueil: rAccueil, devoirs: rDevoirs, devoir: rDevoir, matieres: rMatieres, seances: rSeances, idees: rIdees, reglages: rReglages })[view]();
   }
 
   function rAccueil() {
@@ -94,8 +126,9 @@
     $("#greet").textContent = (h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir") + " Evan · Margaux et l'équipe";
     const r = recommend(), m = mat(r.matiere);
     $("#reco").innerHTML = '<div class="card reco" style="--c:' + esc(col(m.couleur)) + '">' +
-      '<div class="reco-top"><span class="chip" style="background:' + esc(col(m.couleur)) + '">' + esc(m.nom.split(" · ")[0]) + '</span><span class="who">avec ' + esc(r.kind === "devoir" && r.devoir.prof ? r.devoir.prof : profDe(m)) + '</span></div>' +
+      '<div class="reco-top"><span class="chip" style="background:' + esc(col(m.couleur)) + '">' + esc(m.nom.split(" · ")[0]) + '</span><span class="who">avec ' + esc(r.devoir && r.devoir.prof ? r.devoir.prof : profDe(m)) + '</span></div>' +
       '<h1>' + esc(r.titre) + '</h1><p class="why">' + esc(r.raison) + '</p>' +
+      (r.devoir ? '<div class="row"><a class="btn" href="#devoir/' + esc(r.devoir.id) + '">Voir le devoir</a></div>' : "") +
       '<div class="row"><button class="btn primary" type="button" data-start="oral">Commencer à l\'oral</button><button class="btn" type="button" data-start="ecrit">À l\'écrit</button><button class="btn ghost" type="button" data-done>J\'ai fait une séance</button></div>' +
       '<p class="hint">« Commencer » copie la demande pour Margaux et ouvre son bureau : colle-la, ou dis-la au micro.</p></div>';
     $$("#reco [data-start]").forEach((btn) => btn.addEventListener("click", async () => {
@@ -104,7 +137,7 @@
       window.open(bureau(), "_blank", "noopener");
     }));
     $("#reco [data-done]").addEventListener("click", () => { go("seances"); openSeance(r.matiere); });
-    const nx = (A.devoirs || []).filter(OPEN).sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999")).slice(0, 4);
+    const nx = (A.devoirs || []).filter(OPEN).sort((a, b) => sortKey(a).localeCompare(sortKey(b))).slice(0, 4);
     $("#next-dv").innerHTML = nx.length ? nx.map(dvLine).join("") : '<p class="empty">Rien à rendre pour l\'instant. Odile surveille tes mails et Moodle.</p>';
     // équilibre : minutes par matière sur 14 jours
     const t = today(), mins = {};
@@ -116,9 +149,57 @@
   }
 
   function dvLine(d) {
-    const m = mat(d.matiere), t = today(), n = d.due ? days(t, d.due) : null;
-    const when = d.due ? (n < 0 ? "en retard de " + -n + " j" : n === 0 ? "aujourd'hui" : n === 1 ? "demain" : fdate(d.due)) : "sans date";
-    return '<div class="dv" style="--c:' + esc(col(m.couleur)) + '"><div><b>' + esc(d.titre) + '</b><span class="meta">' + esc(m.nom.split(" · ")[0]) + " · " + esc(d.prof || m.prof) + " · " + esc(when) + "</span></div><span class=\"st st-" + esc(d.statut || "nouveau") + '">' + esc(STATUTS[d.statut] || "Repéré") + "</span></div>";
+    const m = mat(d.matiere), e = prochaine(d), flou = e && e.statut === "a_verifier";
+    return '<a class="dv" href="#devoir/' + esc(d.id) + '" style="--c:' + esc(col(m.couleur)) + '"><div><b>' + (d.code ? '<span class="code">' + esc(d.code) + "</span> " : "") + esc(d.titre) + '</b><span class="meta">' + esc(m.nom.split(" · ")[0]) + " · " + esc(d.prof || profDe(m)) + " · " + (flou ? '<span class="verif">date à vérifier</span>' : esc(echLabel(e))) + "</span></div><span class=\"st st-" + esc(d.statut || "nouveau") + '">' + esc(STATUTS[d.statut] || "Repéré") + "</span></a>";
+  }
+
+  // ---------- fiche d'un devoir ----------
+  const DOC_T = { sujet: "Sujet", consigne: "Consigne", exemple: "Exemples", annale: "Annales", cours: "Cours", td: "TD", autre: "Autres" };
+  const OU = { pc: "sur le PC", drive: "Google Drive", moodle: "Moodle" };
+  function rDevoir() {
+    const d = (A.devoirs || []).find((x) => x.id === current);
+    const el = $("#dv-detail");
+    if (!d) { el.innerHTML = '<p class="empty">Devoir introuvable. <a href="#devoirs">Retour aux devoirs</a></p>'; return; }
+    const m = mat(d.matiere), e = prochaine(d), flou = e && e.statut === "a_verifier";
+    const titulaire = m.prof, attribue = d.prof || profDe(m);
+    const opts = Object.keys(STATUTS).map((k) => '<option value="' + k + '"' + ((d.statut || "nouveau") === k ? " selected" : "") + ">" + STATUTS[k] + "</option>").join("");
+    const docs = Array.isArray(d.documents) ? d.documents : [];
+    const groups = {}; docs.forEach((x) => { (groups[x.type] = groups[x.type] || []).push(x); });
+    const docHtml = docs.length ? Object.keys(DOC_T).filter((k) => groups[k]).map((k) => '<h3>' + DOC_T[k] + "</h3>" + groups[k].map((x) => {
+      const url = safeUrl(x.lien);
+      return '<div class="docl"><div><b>' + esc(x.nom) + '</b><span class="meta">' + esc(OU[x.ou] || "à localiser") + (x.note ? " · " + esc(x.note) : "") + "</span>" + (x.chemin ? '<code class="path">' + esc(x.chemin) + "</code>" : "") + "</div>" +
+        (url ? '<a class="btn sm" href="' + esc(url) + '" target="_blank" rel="noopener">Ouvrir</a>' : x.chemin ? '<button class="btn sm" type="button" data-copy="' + esc(x.chemin) + '">Copier le chemin</button>' : "") + "</div>";
+    }).join("")).join("") : '<p class="empty">Aucun document rattaché pour l\'instant. Agnès les range dès que Sami les a récupérés.</p>';
+    const ech = echeances(d);
+    const echHtml = ech.length ? ech.map((x) => '<div class="ech ech-' + esc(x.statut || "a_verifier") + '"><span class="pill-s">' + esc(ECH[x.statut] || "à vérifier") + "</span><div><b>" + esc(x.libelle || "Échéance") + '</b><span class="meta">' + (x.date ? esc(fdate(x.date)) + (x.heure ? " · " + esc(x.heure) : "") : "date inconnue") + " · pour " + esc(POUR[x.pour] || "tout le monde") + (x.source ? " · source : " + esc(x.source) : "") + "</span></div></div>").join("") : '<p class="empty">Aucune échéance connue.</p>';
+    const qs = (Array.isArray(d.questions) ? d.questions : []).filter((q) => q.statut !== "repondue");
+    const qa = (Array.isArray(d.questions) ? d.questions : []).filter((q) => q.statut === "repondue");
+    const WHO = { margaux: "Margaux", sami: "Sami (PC)", evan: "toi" };
+    const ag = d.agenda || {};
+    const agTxt = ag.statut === "cree" ? "Un créneau est dans ton agenda." : flou ? "Rien dans ton agenda : la date n'est pas confirmée. Odile l'ajoutera quand elle le sera." : e && e.statut === "confirmee" ? "Pas encore de créneau dans l'agenda." : "Rien dans ton agenda.";
+    el.innerHTML =
+      '<a class="back-l" href="#devoirs">← Devoirs</a>' +
+      '<div class="card reco" style="--c:' + esc(col(m.couleur)) + '"><div class="reco-top"><span class="chip" style="background:' + esc(col(m.couleur)) + '">' + esc(m.nom.split(" · ")[0]) + "</span>" + (d.code ? '<span class="who">' + esc(d.code) + "</span>" : "") + (d.type ? '<span class="who">· ' + esc(d.type) + "</span>" : "") + "</div>" +
+      "<h1>" + esc(d.titre) + "</h1>" +
+      '<div class="kv"><div class="k">Prochaine échéance</div><div class="v big' + (flou ? " verif" : "") + '" id="dv-next">' + (flou ? "À vérifier" : esc(echLabel(e))) + "</div>" +
+      (flou && e.libelle ? '<div class="k"></div><div class="v meta">' + esc(e.libelle) + "</div>" : "") +
+      '<div class="k">Attribué à</div><div class="v" id="dv-prof"><span class="avatar" aria-hidden="true">' + esc(attribue.slice(0, 1)) + "</span>" + esc(attribue) + (attribue !== titulaire ? ' <span class="meta">en attendant ' + esc(titulaire) + ", prof de la matière</span>" : "") + "</div>" +
+      '<div class="k">Statut</div><div class="v"><select data-st="' + esc(d.id) + '" aria-label="Statut du devoir">' + opts + "</select></div>" +
+      '<div class="k">Agenda</div><div class="v" id="dv-agenda">' + esc(agTxt) + "</div></div>" +
+      '<div class="row"><button class="btn primary" type="button" data-ask>Demander à Margaux</button><button class="btn" type="button" data-work>Travailler dessus</button></div></div>' +
+      '<div class="grid2"><div class="card"><h2>Consigne</h2>' + (d.consigne ? "<p class=\"pre\">" + esc(d.consigne) + "</p>" : '<p class="empty">Pas encore résumée.</p>') + (d.consigneSource ? '<p class="hint">Source : ' + esc(d.consigneSource) + "</p>" : "") +
+      (safeUrl(d.moodle) ? '<p><a href="' + esc(safeUrl(d.moodle)) + '" target="_blank" rel="noopener">Page du cours sur Moodle</a></p>' : "") + "</div>" +
+      '<div class="card"><h2>Échéances</h2><div id="dv-ech">' + echHtml + "</div></div></div>" +
+      '<div class="card"><h2>Documents</h2><div id="dv-docs">' + docHtml + "</div>" + (d.docs ? '<p class="hint">' + esc(d.docs) + "</p>" : "") + "</div>" +
+      '<div class="card"><h2>À vérifier</h2><div id="dv-q">' + (qs.length ? qs.map((q) => '<div class="q"><b>' + esc(q.texte) + '</b><span class="meta">demandé à ' + esc(WHO[q.pour] || q.pour || "Margaux") + "</span></div>").join("") : '<p class="empty">Rien à vérifier.</p>') +
+      (qa.length ? qa.map((q) => '<div class="q done"><b>' + esc(q.texte) + '</b><span class="meta">Réponse : ' + esc(q.reponse || "") + "</span></div>").join("") : "") + "</div>" +
+      (d.manque ? '<p class="manque"><b>Il manque :</b> ' + esc(d.manque) + "</p>" : "") + "</div>" +
+      '<div class="card"><h2>Suivi</h2>' + (d.rendu ? '<p>Premier rendu : <code>' + esc(d.rendu) + "</code></p>" : '<p class="empty">Pas encore de premier rendu.</p>') + (d.suivi ? '<p class="hint">Note du module dans le coffre : <code>' + esc(d.suivi) + "</code></p>" : "") + "</div>";
+    $$("#dv-detail [data-copy]").forEach((b) => b.addEventListener("click", async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast("Chemin copié : colle-le dans l'Explorateur du PC"); } catch (er) { toast("Copie impossible"); } }));
+    $("#dv-detail [data-st]").addEventListener("change", (ev) => save((doc) => { const x = doc.devoirs.find((y) => y.id === d.id); if (x) { x.statut = ev.target.value; x.maj = now(); } }));
+    const ask = async (txt) => { try { await navigator.clipboard.writeText(txt); toast("Demande copiée : colle-la dans le bureau de Margaux"); } catch (er) { toast("Copie impossible"); } window.open(bureau(), "_blank", "noopener"); };
+    $("#dv-detail [data-ask]").addEventListener("click", () => ask("Margaux, où en est le devoir « " + d.titre + " »" + (d.code ? " (" + d.code + ")" : "") + " ? " + (flou ? "La date de rendu pour moi (alternant) est à vérifier. " : "") + "Dis-moi ce qui manque et la prochaine étape."));
+    $("#dv-detail [data-work]").addEventListener("click", () => ask("Margaux, je veux avancer sur le devoir « " + d.titre + " »" + (d.code ? " (" + d.code + ")" : "") + " avec " + attribue + ". Commence par un résumé de la consigne et de ce qui est déjà fait, puis propose le premier pas de 20 minutes."));
   }
 
   function rDevoirs() {
@@ -127,7 +208,7 @@
     $$("#dv-filters [data-f]").forEach((b) => b.addEventListener("click", () => { filter = b.dataset.f; rDevoirs(); }));
     let list = (A.devoirs || []).slice();
     if (filter === "ouverts") list = list.filter(OPEN); else if (filter === "rendus") list = list.filter((d) => !OPEN(d));
-    list.sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999"));
+    list.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
     $("#dv-list").innerHTML = list.length ? list.map((d) => {
       const opts = Object.keys(STATUTS).map((k) => '<option value="' + k + '"' + ((d.statut || "nouveau") === k ? " selected" : "") + ">" + STATUTS[k] + "</option>").join("");
       return '<div class="card dvc">' + dvLine(d) +
@@ -171,7 +252,7 @@
 
   // ---------- navigation et formulaires ----------
   function go(v) { if (location.hash !== "#" + v) location.hash = v; else { view = v; render(); } }
-  function route() { const v = (location.hash || "#accueil").slice(1); view = $('.view[data-view="' + v + '"]') ? v : "accueil"; render(); $("#main").focus({ preventScroll: true }); window.scrollTo(0, 0); }
+  function route() { let v = decodeURIComponent((location.hash || "#accueil").slice(1)); current = null; if (v.startsWith("devoir/")) { current = v.slice(7); v = "devoir"; } view = $('.view[data-view="' + v + '"]') ? v : "accueil"; render(); $("#main").focus({ preventScroll: true }); window.scrollTo(0, 0); }
 
   function bind() {
     window.addEventListener("hashchange", route);
