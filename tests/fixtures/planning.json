@@ -1,4 +1,53 @@
 {
- "log": {},
+ "log": {
+  "2026-11-22:muscu": {
+   "a": "75",
+   "at": "2026-11-22T11:15:00Z",
+   "b": "Dos, triceps",
+   "done": true,
+   "note": "Ancien format (simulation)",
+   "r": 4,
+   "type": "muscu"
+  },
+  "2026-11-25:course": {
+   "a": "5",
+   "at": "2026-11-25T18:00:00Z",
+   "b": "28:40",
+   "done": true,
+   "note": "",
+   "r": 3,
+   "type": "course"
+  },
+  "2026-11-26:muscu": {
+   "a": "60",
+   "at": "2026-11-26T19:00:00Z",
+   "b": "Développé couché",
+   "done": true,
+   "duree": 60,
+   "exos": [
+    {
+     "id": "x1",
+     "nom": "Développé couché",
+     "series": [
+      {
+       "id": "s1",
+       "kg": 40,
+       "reps": 8
+      },
+      {
+       "id": "s2",
+       "kg": 40,
+       "reps": 8
+      }
+     ]
+    }
+   ],
+   "note": "",
+   "r": 3,
+   "sid": "oldsid01",
+   "source": "sport",
+   "type": "muscu"
+  }
+ },
  "projets": {}
 }

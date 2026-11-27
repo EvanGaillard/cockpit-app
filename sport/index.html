@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Sport</title>
+<meta name="description" content="Tes séances de muscu et de course : séries, minuteur de repos, allure.">
+<meta name="theme-color" content="#14181C">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sport">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="../icons/icon-192.png">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="brand" href="#jour">Sport</a>
+    <a class="sync" href="#reglages" aria-label="Synchronisation et réglages"><span class="dot wait" id="sync-dot"></span><span id="sync-t">Démarrage…</span></a>
+  </header>
+  <nav class="tabs" aria-label="Navigation">
+    <a href="#jour" data-v="jour">Aujourd'hui</a>
+    <a href="#historique" data-v="historique">Historique</a>
+    <a href="#reglages" data-v="reglages">Réglages</a>
+  </nav>
+  <main id="main" tabindex="-1">
+    <section class="view" data-view="jour"><div id="jour"></div></section>
+    <section class="view" data-view="muscu"><div id="muscu"></div></section>
+    <section class="view" data-view="course"><div id="course"></div></section>
+    <section class="view" data-view="historique"><h1>Historique</h1><div id="histo"></div></section>
+    <section class="view" data-view="seance"><div id="seance"></div></section>
+    <section class="view" data-view="reglages">
+      <h1>Réglages</h1>
+      <div class="card">
+        <p>L'appli Sport utilise le même dépôt de données privé et le même jeton que le Cockpit de cet appareil.</p>
+        <p class="st-line"><span class="dot wait" id="set-dot"></span><span id="set-status">…</span></p>
+        <p class="hint" id="set-repo"></p>
+        <div class="row"><button class="btn" type="button" id="set-import">Reprendre les réglages du Cockpit</button><button class="btn" type="button" id="set-sync">Synchroniser</button></div>
+        <p class="hint" id="set-msg" role="status"></p>
+        <p class="hint">Pas de Cockpit réglé sur cet appareil ? Ouvre le <a href="../#reglages">Cockpit</a>, règle le dépôt et le jeton, puis reviens.</p>
+      </div>
+      <div class="card">
+        <h2>Repos par défaut</h2>
+        <div class="seg" id="set-repos" role="group" aria-label="Durée de repos par défaut"></div>
+      </div>
+      <p class="hint ver" id="ver"></p>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script>self.STORE_CONFIG = { dbName: "sport-app", docs: ["planning"], readonly: [], importFrom: "cockpit-app", empty: { planning: { log: {} } } };</script>
+<script src="../merge.js"></script>
+<script src="../store.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

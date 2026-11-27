@@ -988,7 +988,7 @@
   }
 
   // ---------- Réglages : jeton GitHub et état de la synchro ----------
-  const APP_VERSION = "1.0.3";
+  const APP_VERSION = "1.0.4";
   const fmtFull = (v) => { if (!v) return "jamais"; const d = new Date(v); return isNaN(d) ? v : d.toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); };
   function renderSettings() {
     const st = Store.status(), cfg = Store.getSettings();

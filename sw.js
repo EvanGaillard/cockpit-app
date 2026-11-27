@@ -2,7 +2,7 @@
  * Les appels à l'API GitHub ne passent jamais par le cache (les données sont gérées par store.js et IndexedDB).
  * Pour publier une nouvelle version : changer VERSION, l'app propose alors « Recharger ».
  * Un changement de store.js ou merge.js oblige AUSSI à changer VERSION dans academie/sw.js (qui les met en cache). */
-const VERSION = "cockpit-app-1.0.3";
+const VERSION = "cockpit-app-1.0.4";
 const SHELL = [
   "./", "index.html", "styles.css", "merge.js", "store.js", "app.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png",
@@ -23,6 +23,7 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // API GitHub et autres : réseau direct
   if (url.pathname.startsWith(new URL("academie/", self.registration.scope).pathname)) return; // l'Académie a son propre service worker
+  if (url.pathname.startsWith(new URL("sport/", self.registration.scope).pathname)) return; // l'appli Sport aussi
   e.respondWith((async () => {
     const cache = await caches.open(VERSION);
     const hit = await cache.match(req, { ignoreSearch: true }) || (req.mode === "navigate" ? await cache.match("index.html") : null);
