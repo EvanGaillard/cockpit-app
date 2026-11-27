@@ -48,6 +48,7 @@ const VIEWS = ["accueil", "devoirs", "matieres", "seances", "idees", "reglages"]
     check(label + " : liste : le projet simulé affiche « date à vérifier »", await until(async () => /Projet tutoré VBA \(simulation\)[\s\S]*date à vérifier/.test(await page.textContent("#dv-list"))));
     await page.click('#dv-list a[href="#devoir/dvsim506"]');
     check(label + " : fiche ouverte", await until(async () => /Projet tutoré VBA/.test(await page.textContent("#dv-detail"))));
+    check(label + " : consigne non résumée : les sujets sont désignés", (await page.locator("#dv-sujet .sujet").count()) === 2);
     check(label + " : prochaine échéance = « À vérifier »", (await page.textContent("#dv-next")).trim() === "À vérifier");
     const prof = await page.textContent("#dv-prof");
     check(label + " : attribué à Margaux, en attendant Victor", /Margaux/.test(prof) && /Victor/.test(prof), prof.trim());
