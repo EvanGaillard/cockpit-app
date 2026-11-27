@@ -89,3 +89,5 @@ details summary { cursor: pointer; font-weight: 700; }
 .toast[hidden] { display: none; }
 a { color: var(--accent); }
 #m-abandon { justify-self: center; }
+.brandrow { display: flex; align-items: baseline; gap: 12px; }
+.back { font-size: 14px; font-weight: 700; color: var(--accent); text-decoration: none; }
