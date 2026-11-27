@@ -133,3 +133,9 @@ a.btn { text-decoration: none; display: inline-block; }
 .sam-plan p { margin: 2px 0 6px; overflow-wrap: anywhere; }
 .sam-who { font-size: 12px; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; }
 .sam-time { font-weight: 700; font-variant-numeric: tabular-nums; margin-left: 6px; }
+.trav { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: #E6EEF2; color: var(--accent); }
+.trav-pret { background: #E1F0E7; color: var(--good); } .trav-erreur { background: #FBEBDC; color: var(--warn); }
+.travail { border-left: 5px solid var(--accent); }
+.travail.trav-pret { border-left-color: var(--good); }
+.travail p { margin: 4px 0; overflow-wrap: anywhere; }
+.btn[disabled] { opacity: .55; cursor: default; }

@@ -4,6 +4,9 @@
  *  documents:[{id,nom,type: sujet|consigne|exemple|annale|cours|td|autre, ou: pc|drive|moodle, chemin, lien, note}],
  *  echeances:[{id,libelle,date,heure,pour: tous|alternants|initiaux,statut: confirmee|a_verifier|passee,source,maj}],
  *  questions:[{id,texte,pour: margaux|sami|evan,statut: ouverte|repondue,reponse,maj}], agenda:{statut: aucun|cree,raison,maj}.
+ *  travail (ticket #6, « Travailler dessus » automatique) : {id, statut: demande|en_cours|pret|annule|erreur, style: demarrer|doux|defi|null,
+ *  consigne (consigne de Samuel ou null), demande (texte), prof, at, maj, resume, rendu, erreur}. L'appli écrit « demande » et « annule » ;
+ *  la routine de Margaux écrit « en_cours », « pret » (resume, rendu) ou « erreur », et remet style et consigne à null dès qu'elle prend le travail.
  *  Règle : due = date CONFIRMÉE de la prochaine échéance, sinon null ; l'agenda n'est rempli que pour une date confirmée.
  * {maj, bureau, matieres:[{id,nom,prof,couleur,maison,ordre}], devoirs:[{id,titre,matiere,prof,due,source,docs,statut,manque,rendu,tache,created,maj}],
  *  seances:[{id,date,matiere,prof,mode,duree,bilan,suite,note,maj}], idees:[{id,texte,created,statut,reponse,maj}], prochaine:{matiere,raison,date}}
@@ -11,7 +14,7 @@
  * L'IA n'est pas dans l'app : les profs travaillent dans le bureau de Margaux et écrivent ce document avec ldata. */
 (function () {
   "use strict";
-  const APP_VERSION = "0.3.0";
+  const APP_VERSION = "0.4.0";
   const S = self.CockpitStore;
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
@@ -218,7 +221,23 @@
 
   function dvLine(d) {
     const m = mat(d.matiere), e = prochaine(d), flou = e && e.statut === "a_verifier";
-    return '<a class="dv" href="#devoir/' + esc(encodeURIComponent(d.id)) + '" style="--c:' + esc(col(m.couleur)) + '"><div><b>' + (d.code ? '<span class="code">' + esc(d.code) + "</span> " : "") + esc(d.titre) + '</b><span class="meta">' + esc(m.nom.split(" · ")[0]) + " · " + esc(d.prof || profDe(m)) + " · " + (flou ? '<span class="verif">date à vérifier</span>' : esc(echLabel(e))) + "</span></div><span class=\"st st-" + esc(d.statut || "nouveau") + '">' + esc(STATUTS[d.statut] || "Repéré") + "</span></a>";
+    return '<a class="dv" href="#devoir/' + esc(encodeURIComponent(d.id)) + '" style="--c:' + esc(col(m.couleur)) + '"><div><b>' + (d.code ? '<span class="code">' + esc(d.code) + "</span> " : "") + esc(d.titre) + '</b><span class="meta">' + esc(m.nom.split(" · ")[0]) + " · " + esc(d.prof || profDe(m)) + " · " + (flou ? '<span class="verif">date à vérifier</span>' : esc(echLabel(e))) + "</span>" + travailBadge(d) + "</div><span class=\"st st-" + esc(d.statut || "nouveau") + '">' + esc(STATUTS[d.statut] || "Repéré") + "</span></a>";
+  }
+
+  // ---------- travail automatique (ticket #6) ----------
+  const TRAV = { demande: "Demandé", en_cours: "En cours", pret: "Rendu prêt", erreur: "À reprendre" };
+  const travActif = (d) => !!(d.travail && (d.travail.statut === "demande" || d.travail.statut === "en_cours"));
+  function travailBadge(d) { const t = d.travail; return t && TRAV[t.statut] ? '<span class="trav trav-' + esc(t.statut) + '">' + esc(TRAV[t.statut]) + "</span>" : ""; }
+  function travailHtml(d) {
+    const t = d.travail; if (!t || !TRAV[t.statut]) return "";
+    const fmt = (iso, o) => { try { return new Date(iso).toLocaleString("fr-FR", o); } catch (e) { return ""; } };
+    const quand = t.at ? fmt(t.at, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+    let body = "";
+    if (t.statut === "demande") body = "<p><b>Demandé à " + esc(t.prof || "Margaux") + "</b>" + (quand ? ' <span class="meta">' + esc(quand) + "</span>" : "") + "</p><p class=\"hint\">Margaux le confie au prof à son prochain passage (une fois par heure). Tu peux fermer l'appli.</p>" + '<button class="btn sm" type="button" data-trav-annule>Annuler la demande</button>';
+    else if (t.statut === "en_cours") body = "<p><b>" + esc(t.prof || "Le prof") + " y travaille.</b></p><p class=\"hint\">Le rendu arrivera ici.</p>";
+    else if (t.statut === "pret") body = "<p><b>Rendu prêt</b>" + (t.maj ? ' <span class="meta">' + esc(fmt(t.maj, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })) + "</span>" : "") + "</p>" + (t.resume ? '<p class="pre">' + esc(t.resume) + "</p>" : "") + (t.rendu ? '<p class="hint">Dans le coffre : <code>' + esc(t.rendu) + "</code></p>" : "") + '<p class="hint">Pour un travail noté, c\'est une base que tu retravailles toi-même.</p>';
+    else if (t.statut === "erreur") body = "<p><b>Le travail n'a pas pu être fait.</b></p>" + (t.erreur ? '<p class="hint">' + esc(t.erreur) + "</p>" : "") + '<p class="hint">Relance avec « Travailler dessus », ou passe par le bureau de Margaux.</p>';
+    return '<div class="card travail trav-' + esc(t.statut) + '" id="dv-travail"><h2>Travail demandé</h2>' + body + "</div>";
   }
 
   // ---------- fiche d'un devoir ----------
@@ -255,7 +274,9 @@
       '<div class="k">Statut</div><div class="v"><select data-st="' + esc(d.id) + '" aria-label="Statut du devoir">' + opts + "</select></div>" +
       '<div class="k">Agenda</div><div class="v" id="dv-agenda">' + esc(agTxt) + "</div></div>" +
       samuelHtml({ devoir: d, matiere: d.matiere }) +
-      '<div class="row"><button class="btn primary" type="button" data-work>' + (samStyle({ devoir: d, matiere: d.matiere }) === "defi" ? "Commencer le défi" : "Travailler dessus") + '</button><button class="btn" type="button" data-ask>Demander à Margaux</button></div></div>' +
+      '<div class="row"><button class="btn primary" type="button" data-work' + (travActif(d) ? " disabled" : "") + ">" + (travActif(d) ? "Déjà demandé" : samStyle({ devoir: d, matiere: d.matiere }) === "defi" ? "Lancer le défi" : "Travailler dessus") + '</button><button class="btn" type="button" data-ask>Demander à Margaux</button><button class="btn ghost" type="button" data-bureau>Ouvrir le bureau (secours)</button></div>' +
+      '<p class="hint">« Travailler dessus » confie le devoir au prof sans que tu aies à rester : le rendu arrive ici.</p></div>' +
+      travailHtml(d) +
       '<div class="grid2"><div class="card"><h2>Consigne</h2>' + (d.consigne ? "<p class=\"pre\">" + esc(d.consigne) + "</p>" : '<p class="empty">Pas encore résumée.</p>') + (docs.filter((x) => x.type === "sujet" || x.type === "consigne").length ? '<div id="dv-sujet"><p class="hint">' + (d.consigne ? "Le texte complet est dans :" : "En attendant, le texte de la consigne est dans :") + "</p>" + docs.filter((x) => x.type === "sujet" || x.type === "consigne").map((x) => '<p class="sujet"><b>' + esc(x.nom) + "</b> <span class=\"meta\">" + esc(OU[x.ou] || "à localiser") + "</span></p>").join("") + "</div>" : "") + (d.consigneSource ? '<p class="hint">Source : ' + esc(d.consigneSource) + "</p>" : "") +
       (safeUrl(d.moodle) ? '<p><a href="' + esc(safeUrl(d.moodle)) + '" target="_blank" rel="noopener">Page du cours sur Moodle</a></p>' : "") + "</div>" +
       '<div class="card"><h2>Échéances</h2><div id="dv-ech">' + echHtml + "</div></div></div>" +
@@ -270,7 +291,18 @@
     $("#dv-detail [data-ask]").addEventListener("click", () => ask("Margaux, où en est le devoir « " + d.titre + " »" + (d.code ? " (" + d.code + ")" : "") + " ? " + (flou ? "La date de rendu pour moi (alternant) est à vérifier. " : "") + "Dis-moi ce qui manque et la prochaine étape."));
     const rd = { devoir: d, matiere: d.matiere };
     bindSamuel($("#dv-detail"), rd, rDevoir);
-    $("#dv-detail [data-work]").addEventListener("click", () => { const st = samStyle(rd); const txt = withSamuel(rd, "Margaux, je veux avancer sur le devoir « " + d.titre + " »" + (d.code ? " (" + d.code + ")" : "") + (attribue === "Margaux" ? " avec toi" : " avec " + attribue) + ", à l'écrit, " + (st === "doux" ? 15 : 20) + " minutes. " + (st ? "" : "Commence par un résumé de la consigne et de ce qui est déjà fait, puis propose le premier pas de 20 minutes.")); forgetSamuel(); rDevoir(); ask(txt); });
+    const demandeTxt = (st) => "Margaux, je veux avancer sur le devoir « " + d.titre + " »" + (d.code ? " (" + d.code + ")" : "") + (attribue === "Margaux" ? " avec toi" : " avec " + attribue) + ", à l'écrit, " + (st === "doux" ? 15 : 20) + " minutes. " + (st ? "" : "Commence par un résumé de la consigne et de ce qui est déjà fait, puis propose le premier pas de 20 minutes.");
+    // Travailler dessus : la demande est déposée dans le document (file d'attente) ; la routine de Margaux la traite
+    $("#dv-detail [data-work]").addEventListener("click", () => {
+      if (travActif(d)) return;
+      const st = samStyle(rd), consigne = st ? samuelPlan(rd, st).consigne : null, prof = attribue;
+      save((doc) => { const x = doc.devoirs.find((y) => y.id === d.id); if (x) { x.travail = { id: uid(), statut: "demande", style: st || null, consigne, demande: demandeTxt(st), prof, at: now(), maj: now() }; x.maj = now(); } });
+      forgetSamuel(); rDevoir(); toast("Demandé à " + prof + " : le rendu arrivera dans la fiche");
+    });
+    const an = $("#dv-detail [data-trav-annule]");
+    if (an) an.addEventListener("click", () => save((doc) => { const x = doc.devoirs.find((y) => y.id === d.id); if (x && x.travail && x.travail.statut === "demande") { x.travail.statut = "annule"; x.travail.style = null; x.travail.consigne = null; x.travail.maj = now(); x.maj = now(); } }));
+    // secours : l'ancien parcours (copie de la demande + ouverture du bureau de Margaux)
+    $("#dv-detail [data-bureau]").addEventListener("click", () => { const st = samStyle(rd); const txt = withSamuel(rd, demandeTxt(st)); forgetSamuel(); rDevoir(); ask(txt); });
   }
 
   function rDevoirs() {

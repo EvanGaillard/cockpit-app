@@ -72,10 +72,10 @@ async function until(fn, ms) { const t0 = Date.now(); while (Date.now() - t0 < (
     await page.click('#dv-detail [data-sam-st="defi"]');
     const plan3 = await page.textContent("#dv-detail .sam-plan");
     check(label + " · défi : entrée ambitieuse liée au devoir", /Pour entrer/.test(plan3) && /en 5 minutes chrono, ferme-le, puis écris de mémoire le plan/.test(plan3) && /Margaux le confronte/.test(plan3), plan3.replace(/\s+/g, " ").slice(0, 120));
-    check(label + " · défi : bouton « Commencer le défi »", (await page.textContent("#dv-detail [data-work]")).trim() === "Commencer le défi");
+    check(label + " · défi : bouton « Lancer le défi »", (await page.textContent("#dv-detail [data-work]")).trim() === "Lancer le défi");
     check(label + " · pas de défilement horizontal · fiche avec défi", await noH());
     await page.screenshot({ path: path.join(SHOTS, slug + "-2-defi.png"), fullPage: true });
-    await page.click("#dv-detail [data-work]");
+    await page.click("#dv-detail [data-bureau]"); // parcours de secours : copie + bureau de Margaux
     const p3 = await clip();
     check(label + " · défi : le prof reçoit l'entrée ambitieuse et la correction exigeante", /J'ai envie d'un défi/.test(p3) && /Ouvre par ce défi/.test(p3) && /correction exigeante/.test(p3) && /Projet tutoré VBA \(simulation\)/.test(p3) && /avec toi, à l'écrit, 20 minutes/.test(p3));
 
