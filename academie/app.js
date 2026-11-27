@@ -395,8 +395,10 @@
     const attente = m.filter((x) => x.de === "evan" && x.statut === "envoye").length;
     el.innerHTML = '<a class="back-l" href="#profs">← Profs</a>' +
       '<div class="card pf-head">' + avatarHtml(pp, true) + "<div><h1>" + esc(pp.nom) + '</h1><span class="meta">' + esc(roleDe(pp)) + "</span><p class=\"acc\">" + esc(pp.accroche) + "</p></div></div>" +
-      '<div class="card"><div class="thread" id="pf-thread">' + (m.length ? m.map((x) => '<div class="bulle ' + (x.de === "evan" ? "moi" : "lui") + '"><p class="pre">' + esc(x.texte) + '</p><span class="meta">' + (x.de === "evan" ? "Toi" : esc(pp.nom)) + " · " + esc(x.at ? new Date(x.at).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "") + (x.de === "evan" && x.statut === "erreur" ? " · non transmis" : "") + "</span></div>").join("") : '<p class="empty">Pas encore de message. Pose une question, demande une explication, un exercice ou un avis.</p>') + "</div>" +
+      '<div class="card"><div class="thread" id="pf-thread">' + (m.length ? m.map((x) => '<div class="bulle ' + (x.de === "evan" ? "moi" : "lui") + '"><p class="pre">' + esc(x.texte) + '</p><span class="meta">' + (x.de === "evan" ? "Toi" : esc(pp.nom)) + " · " + esc(x.at ? new Date(x.at).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "") + (x.de === "evan" && x.statut === "erreur" ? ' · non transmis <button class="btn sm" type="button" data-renvoi="' + esc(x.id) + '">Renvoyer</button>' : "") + "</span></div>").join("") : '<p class="empty">Pas encore de message. Pose une question, demande une explication, un exercice ou un avis.</p>') + "</div>" +
       (attente ? '<p class="hint" id="pf-attente">' + esc(pp.nom) + " répond au prochain passage de Margaux (une fois par heure). Tu peux fermer l'appli : la réponse arrivera ici.</p>" : "") +
+      (pp.id === "samuel" ? '<p class="urgence" id="pf-urgence">En cas d\'urgence, n\'attends pas une réponse : appelle le <b>15</b> ou le <b>112</b>. En cas de détresse, le <b>3114</b> répond 24 h/24. Samuel complète un vrai suivi, il ne le remplace pas.</p>' : "") +
+      '<p class="hint">Tes conversations sont gardées dans tes données privées (LEON-DATA), historique compris.</p>' +
       '<form class="form" id="pf-form"><label class="sr" for="pf-text">Message pour ' + esc(pp.nom) + '</label><textarea id="pf-text" rows="3" maxlength="2000" placeholder="Écris à ' + esc(pp.nom) + '…"></textarea>' +
       '<div class="row end"><button class="btn ghost" type="button" data-now>Tout de suite (bureau de Margaux)</button><button class="btn primary" type="submit">Envoyer</button></div></form></div>';
     // les réponses affichées sont « vues » sur cet appareil
@@ -408,6 +410,7 @@
       save((d) => d.messages.push({ id: uid(), prof: pp.id, de: "evan", texte, at: now(), statut: "envoye", maj: now() }));
       toast("Envoyé à " + pp.nom + " : réponse dans l'heure");
     });
+    $$("#pf-thread [data-renvoi]").forEach((b) => b.addEventListener("click", () => save((d) => { const x = d.messages.find((y) => y.id === b.dataset.renvoi); if (x && x.statut === "erreur") { x.statut = "envoye"; x.maj = now(); } })));
     $("#pf-form [data-now]").addEventListener("click", async () => {
       const texte = $("#pf-text").value.trim();
       const txt = "Margaux, transmets à " + pp.nom + " (" + roleDe(pp) + ")" + (texte ? " : « " + texte + " »" : " : je voudrais lui parler maintenant.");

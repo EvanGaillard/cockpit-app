@@ -159,3 +159,5 @@ a.btn { text-decoration: none; display: inline-block; }
 .bulle p { margin: 0 0 4px; overflow-wrap: anywhere; }
 #pf-form { margin-top: 12px; }
 .badge[hidden] { display: none; }
+.urgence { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: #FFF7E8; font-size: 14px; }
+.bulle .btn.sm { margin-left: 6px; padding: 4px 8px; font-size: 12px; }

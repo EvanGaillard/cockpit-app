@@ -62,6 +62,17 @@ async function until(fn, ms) { const t0 = Date.now(); while (Date.now() - t0 < (
     await page.click("#pf-form [data-now]");
     const clip = await page.evaluate(() => navigator.clipboard.readText());
     check(label + " · « Tout de suite » : copié pour Margaux, bureau ouvert, rien écrit", /^Margaux, transmets à Ingrid \(Anglais\) : « Peux-tu me corriger cette phrase \? »/.test(clip) && (await page.evaluate(() => window.__opened.length)) === 1 && mock.commits.length === n1);
+    // message en erreur : bouton « Renvoyer »
+    mock.external("academie.json", (d) => d.messages.push({ id: "err00001", prof: "ingrid", de: "evan", texte: "Message en erreur (test)", at: new Date().toISOString(), statut: "erreur", maj: new Date().toISOString() }));
+    await resync();
+    check(label + " · message non transmis : bouton « Renvoyer »", await until(async () => (await page.locator('#pf-thread [data-renvoi="err00001"]').count()) === 1, 12000));
+    await page.click('#pf-thread [data-renvoi="err00001"]');
+    check(label + " · renvoyer : le message repasse à « envoye »", await until(() => M().find((m) => m.id === "err00001").statut === "envoye"));
+    // Samuel : repères d'urgence toujours visibles
+    await page.evaluate(() => (location.hash = "prof/samuel"));
+    check(label + " · Samuel : 15, 112 et 3114 affichés en permanence", await until(async () => { const x = await page.textContent("#pf-urgence"); return /15/.test(x) && /112/.test(x) && /3114/.test(x); }));
+    await page.evaluate(() => (location.hash = "prof/ingrid"));
+    check(label + " · les autres profs n'affichent pas ce bloc, mais la mention des données privées", await until(async () => (await page.locator("#pf-urgence").count()) === 0 && /données privées/.test(await page.textContent("#pf-conv"))));
     // une personne inconnue
     await page.evaluate(() => (location.hash = "prof/inconnu"));
     check(label + " · adresse d'une personne inconnue : message clair", await until(async () => /Personne introuvable/.test(await page.textContent("#pf-conv"))));
