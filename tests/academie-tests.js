@@ -60,6 +60,8 @@ const VIEWS = ["accueil", "devoirs", "matieres", "seances", "idees", "reglages"]
     await page.screenshot({ path: path.join(SHOTS, slug + "-devoir.png"), fullPage: true });
     check(label + " : consulter ne modifie rien dans le dépôt", mock.commits.length === before);
     await page.evaluate(() => (location.hash = "devoir/dvxss001"));
+    await page.evaluate(() => (location.hash = "devoir/%E0%A4%A"));
+    check(label + " : adresse mal formée : pas de plantage, retour à l'accueil", await until(async () => /Bonjour|Bon après-midi|Bonsoir/.test(await page.textContent("#greet"))));
     check(label + " : titre piégé affiché comme du texte", await until(async () => (await page.textContent("#dv-detail")).includes("<img src=x onerror=alert(1)>")) && (await page.locator("#dv-detail img").count()) === 0);
     await page.evaluate(() => (location.hash = "accueil"));
     check(label + " : lien « ← Cockpit » présent", (await page.getAttribute(".back", "href")) === "../");
@@ -92,6 +94,11 @@ const VIEWS = ["accueil", "devoirs", "matieres", "seances", "idees", "reglages"]
     await page.waitForSelector("#dv-detail [data-st]");
     await page.selectOption("#dv-detail [data-st]", "premier_rendu");
     check("fiche : changer le statut l'écrit dans le dépôt, échéances et documents intacts", await until(() => { const x = mock.json("academie.json").devoirs.find((y) => y.id === "dvsim506"); return x && x.statut === "premier_rendu" && x.echeances.length === 2 && x.documents.length === 5 && x.due === null; }));
+    mock.external("academie.json", (d) => d.devoirs.push({ id: "dvretard", titre: "Devoir en retard (test)", matiere: "philo", prof: "Nour", statut: "attribue", due: null, echeances: [{ id: "e1", libelle: "Rendu", date: "2026-01-05", statut: "confirmee" }], created: "2026-11-27T10:00:00Z", maj: "2026-11-27T10:00:00Z" }));
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await page.evaluate(() => (location.hash = "accueil"));
+    check("accueil : un devoir confirmé (échéance seule, sans due) en retard est proposé en premier", await until(async () => /Devoir en retard \(test\)/.test(await page.textContent("#reco")), 12000));
+    check("accueil : le devoir en retard est en tête de liste, avant les dates à vérifier", await until(async () => /^Devoir en retard/.test((await page.textContent("#next-dv .dv b")).trim()), 5000));
     // le jeton n'est jamais recopié dans la base de l'Académie
     const tokInAcad = await page.evaluate(() => new Promise((res) => { const rq = indexedDB.open("academie-app"); rq.onsuccess = () => { const d = rq.result; const r = d.transaction("kv", "readonly").objectStore("kv").get("token"); r.onsuccess = () => res(r.result || null); r.onerror = () => res("err"); }; }));
     check("jeton absent de la base de l'Académie (relu dans le Cockpit)", tokInAcad === null);

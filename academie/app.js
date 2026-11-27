@@ -56,7 +56,7 @@
   }
   // prochaine échéance utile : la plus proche date confirmée à venir, sinon une échéance « à vérifier »
   function prochaine(d) {
-    const t = today(), list = echeances(d).filter((e) => e.statut !== "passee");
+    const t = today(), list = echeances(d).filter((e) => e.statut !== "passee").map((e) => (e.statut === "confirmee" && e.date ? e : Object.assign({}, e, { statut: "a_verifier" })));
     const conf = list.filter((e) => e.statut === "confirmee" && e.date && e.date >= t).sort((a, b) => a.date.localeCompare(b.date));
     const conf0 = list.filter((e) => e.statut === "confirmee" && e.date).sort((a, b) => a.date.localeCompare(b.date));
     return conf[0] || list.find((e) => e.statut === "a_verifier") || conf0[conf0.length - 1] || null;
@@ -68,7 +68,8 @@
     const n = days(today(), e.date);
     return n < 0 ? "en retard de " + -n + " j" : n === 0 ? "aujourd'hui" : n === 1 ? "demain" : fdate(e.date) + (e.heure ? " · " + e.heure : "");
   }
-  const sortKey = (d) => { const e = prochaine(d); return e ? (e.statut === "a_verifier" ? "0000" : e.date) : "9999"; }; // à vérifier en tête
+  // tri : en retard d'abord, puis à vérifier, puis par date ; sans date en dernier
+  const sortKey = (d) => { const e = prochaine(d); if (!e) return "9999"; if (e.statut === "a_verifier") return "0001"; return e.date < today() ? "0000" + e.date : e.date; };
   const safeUrl = (u) => (/^https:\/\//.test(u || "") ? u : null);
 
   function mats() {
@@ -91,10 +92,10 @@
   function lastSeance(mid) { return (A.seances || []).filter((s) => s.matiere === mid).map((s) => s.date).sort().pop() || null; }
   function recommend() {
     const t = today();
-    const open = (A.devoirs || []).filter(OPEN).filter((d) => d.due).sort((a, b) => a.due.localeCompare(b.due));
-    const urgent = open.find((d) => days(t, d.due) <= 7);
+    const dated = (A.devoirs || []).filter(OPEN).map((d) => ({ d, e: prochaine(d) })).filter((x) => x.e && x.e.statut === "confirmee").sort((a, b) => a.e.date.localeCompare(b.e.date));
+    const hit = dated.find((x) => days(t, x.e.date) <= 7), urgent = hit && hit.d;
     if (urgent) {
-      const n = days(t, urgent.due);
+      const n = days(t, hit.e.date);
       return { kind: "devoir", matiere: urgent.matiere, titre: urgent.titre, raison: n < 0 ? "Échéance dépassée de " + -n + " j : on fait le point, sans paniquer." : n === 0 ? "C'est pour aujourd'hui." : "À rendre dans " + n + " j.", devoir: urgent };
     }
     const flou = (A.devoirs || []).filter(OPEN).find(aVerifier);
@@ -128,7 +129,7 @@
     $("#reco").innerHTML = '<div class="card reco" style="--c:' + esc(col(m.couleur)) + '">' +
       '<div class="reco-top"><span class="chip" style="background:' + esc(col(m.couleur)) + '">' + esc(m.nom.split(" · ")[0]) + '</span><span class="who">avec ' + esc(r.devoir && r.devoir.prof ? r.devoir.prof : profDe(m)) + '</span></div>' +
       '<h1>' + esc(r.titre) + '</h1><p class="why">' + esc(r.raison) + '</p>' +
-      (r.devoir ? '<div class="row"><a class="btn" href="#devoir/' + esc(r.devoir.id) + '">Voir le devoir</a></div>' : "") +
+      (r.devoir ? '<div class="row"><a class="btn" href="#devoir/' + esc(encodeURIComponent(r.devoir.id)) + '">Voir le devoir</a></div>' : "") +
       '<div class="row"><button class="btn primary" type="button" data-start="oral">Commencer à l\'oral</button><button class="btn" type="button" data-start="ecrit">À l\'écrit</button><button class="btn ghost" type="button" data-done>J\'ai fait une séance</button></div>' +
       '<p class="hint">« Commencer » copie la demande pour Margaux et ouvre son bureau : colle-la, ou dis-la au micro.</p></div>';
     $$("#reco [data-start]").forEach((btn) => btn.addEventListener("click", async () => {
@@ -150,7 +151,7 @@
 
   function dvLine(d) {
     const m = mat(d.matiere), e = prochaine(d), flou = e && e.statut === "a_verifier";
-    return '<a class="dv" href="#devoir/' + esc(d.id) + '" style="--c:' + esc(col(m.couleur)) + '"><div><b>' + (d.code ? '<span class="code">' + esc(d.code) + "</span> " : "") + esc(d.titre) + '</b><span class="meta">' + esc(m.nom.split(" · ")[0]) + " · " + esc(d.prof || profDe(m)) + " · " + (flou ? '<span class="verif">date à vérifier</span>' : esc(echLabel(e))) + "</span></div><span class=\"st st-" + esc(d.statut || "nouveau") + '">' + esc(STATUTS[d.statut] || "Repéré") + "</span></a>";
+    return '<a class="dv" href="#devoir/' + esc(encodeURIComponent(d.id)) + '" style="--c:' + esc(col(m.couleur)) + '"><div><b>' + (d.code ? '<span class="code">' + esc(d.code) + "</span> " : "") + esc(d.titre) + '</b><span class="meta">' + esc(m.nom.split(" · ")[0]) + " · " + esc(d.prof || profDe(m)) + " · " + (flou ? '<span class="verif">date à vérifier</span>' : esc(echLabel(e))) + "</span></div><span class=\"st st-" + esc(d.statut || "nouveau") + '">' + esc(STATUTS[d.statut] || "Repéré") + "</span></a>";
   }
 
   // ---------- fiche d'un devoir ----------
@@ -161,7 +162,7 @@
     const el = $("#dv-detail");
     if (!d) { el.innerHTML = '<p class="empty">Devoir introuvable. <a href="#devoirs">Retour aux devoirs</a></p>'; return; }
     const m = mat(d.matiere), e = prochaine(d), flou = e && e.statut === "a_verifier";
-    const titulaire = m.prof, attribue = d.prof || profDe(m);
+    const titulaire = String(m.prof || ""), attribue = String(d.prof || profDe(m));
     const opts = Object.keys(STATUTS).map((k) => '<option value="' + k + '"' + ((d.statut || "nouveau") === k ? " selected" : "") + ">" + STATUTS[k] + "</option>").join("");
     const docs = Array.isArray(d.documents) ? d.documents : [];
     const groups = {}; docs.forEach((x) => { (groups[x.type] = groups[x.type] || []).push(x); });
@@ -252,7 +253,7 @@
 
   // ---------- navigation et formulaires ----------
   function go(v) { if (location.hash !== "#" + v) location.hash = v; else { view = v; render(); } }
-  function route() { let v = decodeURIComponent((location.hash || "#accueil").slice(1)); current = null; if (v.startsWith("devoir/")) { current = v.slice(7); v = "devoir"; } view = $('.view[data-view="' + v + '"]') ? v : "accueil"; render(); $("#main").focus({ preventScroll: true }); window.scrollTo(0, 0); }
+  function route() { let v = (location.hash || "#accueil").slice(1); try { v = decodeURIComponent(v); } catch (er) { v = "accueil"; } current = null; if (v.startsWith("devoir/")) { current = v.slice(7); v = "devoir"; } view = $('.view[data-view="' + v + '"]') ? v : "accueil"; render(); $("#main").focus({ preventScroll: true }); window.scrollTo(0, 0); }
 
   function bind() {
     window.addEventListener("hashchange", route);
