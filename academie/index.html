@@ -34,6 +34,7 @@
   <nav class="tabs" aria-label="Navigation">
     <a href="#accueil" data-v="accueil">Accueil</a>
     <a href="#devoirs" data-v="devoirs">Devoirs<span class="badge" id="dv-badge" hidden></span></a>
+    <a href="#profs" data-v="profs">Profs<span class="badge" id="pf-badge" hidden></span></a>
     <a href="#matieres" data-v="matieres">Matières</a>
     <a href="#seances" data-v="seances">Séances</a>
     <a href="#idees" data-v="idees">Idées</a>
@@ -65,6 +66,16 @@
 
     <section class="view" data-view="devoir" aria-label="Fiche du devoir">
       <div id="dv-detail"></div>
+    </section>
+
+    <section class="view" data-view="profs">
+      <div class="head"><h1>Profs</h1></div>
+      <p class="hint">Écris à qui tu veux : une question, une explication, un exercice, un avis. La réponse arrive ici, dans l'heure.</p>
+      <div class="pfs" id="pf-list"></div>
+    </section>
+
+    <section class="view" data-view="prof" aria-label="Conversation">
+      <div id="pf-conv"></div>
     </section>
 
     <section class="view" data-view="matieres">
@@ -105,7 +116,7 @@
   </main>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script>self.STORE_CONFIG = { dbName: "academie-app", docs: ["academie"], readonly: [], importFrom: "cockpit-app", empty: { academie: { matieres: [], devoirs: [], seances: [], idees: [] } } };</script>
+<script>self.STORE_CONFIG = { dbName: "academie-app", docs: ["academie"], readonly: [], importFrom: "cockpit-app", empty: { academie: { matieres: [], devoirs: [], seances: [], idees: [], messages: [] } } };</script>
 <script src="../merge.js"></script>
 <script src="../store.js"></script>
 <script src="app.js"></script>

@@ -11,7 +11,7 @@ function serve() { return new Promise((resolve) => { const srv = http.createServ
 let failed = 0; const out = [];
 function check(n, c, d) { console.error((c ? "ok " : "KO ") + n); out.push((c ? "ok    · " : "ÉCHEC · ") + n + (d ? " · " + d : "")); if (!c) failed++; }
 async function until(fn, ms) { const t0 = Date.now(); while (Date.now() - t0 < (ms || 10000)) { try { if (await fn()) return true; } catch (e) {} await new Promise((r) => setTimeout(r, 100)); } return false; }
-const VIEWS = ["accueil", "devoirs", "matieres", "seances", "idees", "reglages"];
+const VIEWS = ["accueil", "devoirs", "profs", "matieres", "seances", "idees", "reglages"];
 (async () => {
   const srv = await serve(), BASE = "http://127.0.0.1:" + srv.address().port + "/";
   const browser = await chromium.launch(); const errors = [];
@@ -67,7 +67,7 @@ const VIEWS = ["accueil", "devoirs", "matieres", "seances", "idees", "reglages"]
     await page.evaluate(() => (location.hash = "accueil"));
     check(label + " : lien « ← Cockpit » présent", (await page.getAttribute(".back", "href")) === "../");
     await page.evaluate(() => (location.hash = "matieres"));
-    check(label + " : 13 matières, 12 en attente (seule la philo est active)", (await page.locator(".mat").count()) === 13 && (await page.locator(".mat.off").count()) === 12);
+    check(label + " : 13 matières, toutes actives sauf le sport", (await page.locator(".mat").count()) === 13 && (await page.locator(".mat.off").count()) === 1);
     await ctx.close();
   }
   { // écritures (ordinateur)
@@ -80,10 +80,10 @@ const VIEWS = ["accueil", "devoirs", "matieres", "seances", "idees", "reglages"]
     check("commit « app : academie »", mock.commits.some((c) => c.message === "app : academie"));
     await page.evaluate(() => (location.hash = "seances")); await page.click("#se-add-open");
     await page.selectOption("#se-mat", "darija"); await page.fill("#se-bilan", "Cinq mots (test)"); await page.click("#se-form button[type=submit]");
-    check("séance écrite dans le dépôt", await until(() => mock.json("academie.json").seances.some((s) => s.matiere === "darija" && s.prof === "Margaux" && s.bilan === "Cinq mots (test)")));
+    check("séance écrite dans le dépôt", await until(() => mock.json("academie.json").seances.some((s) => s.matiere === "darija" && s.prof === "Yasmine" && s.bilan === "Cinq mots (test)")));
     await page.evaluate(() => (location.hash = "devoirs")); await page.click("#dv-add-open");
     await page.fill("#dv-titre", "Devoir de test"); await page.selectOption("#dv-mat", "energie"); await page.click("#dv-form button[type=submit]");
-    check("devoir d'une matière en attente : confié à Margaux", await until(() => mock.json("academie.json").devoirs.some((d) => d.titre === "Devoir de test" && d.prof === "Margaux" && d.statut === "nouveau")));
+    check("devoir confié au prof de la matière (Étienne)", await until(() => mock.json("academie.json").devoirs.some((d) => d.titre === "Devoir de test" && d.prof === "Étienne" && d.statut === "nouveau")));
     // statut changé + écriture concurrente d'une routine (Margaux) : rien n'est perdu
     mock.beforePut = () => mock.external("academie.json", (d) => d.devoirs.push({ id: "dvroutin", titre: "Ajouté par Odile", matiere: "iut", prof: "Victor", statut: "attribue", created: "2026-11-27T10:00:00Z", maj: "2026-11-27T10:00:00Z" }));
     await page.selectOption('[data-st="dv000002"]', "premier_rendu");

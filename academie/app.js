@@ -8,6 +8,8 @@
  *  consigne (toujours null : jamais écrite par l'appli, la routine la reconstruit à partir du style), demande (texte neutre), prof, at, maj, resume, rendu, erreur}.
  *  L'appli écrit seulement « demande » et « annule » ; la routine de Margaux écrit « en_cours », « pret » (resume, rendu) ou « erreur »
  *  et remet style à null quand le travail est fini. Un « en_cours » sans nouvelle depuis 3 h est considéré comme bloqué (on peut relancer).
+ *  messages (ticket « parler aux profs ») : [{id, prof: id de la personne, de: evan|prof, texte, at, statut: envoye|repondu|erreur (messages d'Evan),
+ *  reponseA: id du message d'Evan (réponses), maj}]. L'appli écrit les messages d'Evan ; la routine de Margaux écrit les réponses et passe le statut.
  *  Règle : due = date CONFIRMÉE de la prochaine échéance, sinon null ; l'agenda n'est rempli que pour une date confirmée.
  * {maj, bureau, matieres:[{id,nom,prof,couleur,maison,ordre}], devoirs:[{id,titre,matiere,prof,due,source,docs,statut,manque,rendu,tache,created,maj}],
  *  seances:[{id,date,matiere,prof,mode,duree,bilan,suite,note,maj}], idees:[{id,texte,created,statut,reponse,maj}], prochaine:{matiere,raison,date}}
@@ -15,7 +17,7 @@
  * L'IA n'est pas dans l'app : les profs travaillent dans le bureau de Margaux et écrivent ce document avec ldata. */
 (function () {
   "use strict";
-  const APP_VERSION = "0.4.0";
+  const APP_VERSION = "0.5.0";
   const S = self.CockpitStore;
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
@@ -30,7 +32,7 @@
 
   // Matières par défaut (cadrage du 27/11/2026). Le document peut les compléter ou les modifier (même id).
   const BASE_MATS = [
-    { id: "philo", nom: "Philosophie", prof: "Nour", couleur: "#F2A7C3", maison: "Chalet-bibliothèque", ordre: 1, actif: true },
+    { id: "philo", nom: "Philosophie", prof: "Nour", couleur: "#F2A7C3", maison: "Chalet-bibliothèque", ordre: 1 },
     { id: "iut", nom: "IUT · maths, physique, métrologie", prof: "Victor", couleur: "#8FB8E8", maison: "Observatoire", ordre: 2 },
     { id: "anglais", nom: "Anglais", prof: "Ingrid", couleur: "#F2C66D", maison: "Maison anglaise", ordre: 3 },
     { id: "darija", nom: "Darija", prof: "Yasmine", couleur: "#E89A6B", maison: "Riad", ordre: 4 },
@@ -44,6 +46,32 @@
     { id: "musique", nom: "Musique", prof: "Julien", couleur: "#C58FD6", maison: "Maison du musicien", ordre: 12 },
     { id: "sport", nom: "Sport", prof: "Karim et Sofia", couleur: "#8FD07A", maison: "Terrain", ordre: 13 },
   ];
+  // Les personnes à qui Evan peut écrire (fiches complètes : Systeme/Professeurs.md du coffre). Portraits : initiales en attendant les images.
+  const PERSONNES = [
+    { id: "margaux", nom: "Margaux", role: "Directrice des apprentissages", accroche: "Elle orchestre tout : devoirs, séances, réunions de profs." },
+    { id: "nour", nom: "Nour", matiere: "philo", accroche: "Philosophie, douceur et méthode socratique ; elle part de ta vie concrète." },
+    { id: "victor", nom: "Victor", matiere: "iut", accroche: "Maths, physique, métrologie : rigoureux et passionné." },
+    { id: "ingrid", nom: "Ingrid", matiere: "anglais", accroche: "Ancienne interprète : elle reformule en douceur et aime le débat." },
+    { id: "yasmine", nom: "Yasmine", matiere: "darija", accroche: "Darija du quotidien, à l'oral d'abord, avec beaucoup d'humour." },
+    { id: "etienne", nom: "Étienne", matiere: "energie", accroche: "Énergie et ordres de grandeur, avec douceur." },
+    { id: "leila", nom: "Leïla", matiere: "environnement", accroche: "Climat et mesures de terrain, sources solides." },
+    { id: "nils", nom: "Nils", matiere: "ia", accroche: "IA et code, avec du recul et plusieurs points de vue." },
+    { id: "lucien", nom: "Lucien", matiere: "eloquence", accroche: "Éloquence et écriture : il fait rejouer jusqu'à ce que ce soit juste." },
+    { id: "bernard", nom: "Bernard", matiere: "economie", accroche: "Économie et finance, pour éviter les erreurs classiques." },
+    { id: "patrick", nom: "Patrick", matiere: "geopolitique", accroche: "Géopolitique : chaleureux, tous les camps, des sources vérifiées." },
+    { id: "jules", nom: "Jules", matiere: "methode", accroche: "Méthode sur mesure : mémoire, concentration, répétition espacée." },
+    { id: "julien", nom: "Julien", matiere: "musique", accroche: "Musique : de PNL à Beethoven, guitare et piano." },
+    { id: "samuel", nom: "Samuel", role: "Mentor", accroche: "Il t'aide à trouver le bon rythme. Il complète un vrai suivi, sans le remplacer." },
+  ];
+  const personne = (id) => PERSONNES.find((x) => x.id === id) || null;
+  const roleDe = (pp) => (pp.matiere ? mat(pp.matiere).nom.split(" · ")[0] : pp.role);
+  const couleurDe = (pp) => (pp.matiere ? col(mat(pp.matiere).couleur) : pp.id === "samuel" ? "#B9D3E6" : "#CFE5D6");
+  const msgs = (pid) => (Array.isArray(A.messages) ? A.messages : []).filter((m) => m && m.prof === pid).sort((a, b) => (a.at || "").localeCompare(b.at || ""));
+  // « vu » : confort propre à l'appareil (navigateur), jamais dans le dépôt
+  const vuGet = (pid) => { try { return localStorage.getItem("acad-vu:" + pid) || ""; } catch (e) { return ""; } };
+  const vuSet = (pid, iso) => { try { localStorage.setItem("acad-vu:" + pid, iso); } catch (e) { /* sans stockage, pas de pastille */ } };
+  const nonLus = (pid) => msgs(pid).filter((m) => m.de === "prof" && (m.at || "") > vuGet(pid)).length;
+
   const STATUTS = { nouveau: "Repéré", attribue: "Attribué", premier_rendu: "Premier rendu prêt", retravail: "À retravailler", rendu: "Rendu", annule: "Annulé" };
   const OPEN = (d) => d.statut !== "rendu" && d.statut !== "annule";
 
@@ -81,13 +109,13 @@
     (A.matieres || []).forEach((m) => { if (m && m.id) byId[m.id] = Object.assign({}, byId[m.id] || {}, m); });
     return Object.values(byId).sort((a, b) => (a.ordre || 99) - (b.ordre || 99));
   }
-  // Équipe active (décision d'Evan du 27/11) : Nour seulement. Un document peut activer une matière (actif: true).
-  const actif = (m) => m.actif === true;
+  // Équipe active (décision d'Evan du 27/11, soir) : tous les profs ; le sport attend son appli. Un document peut désactiver une matière (actif: false).
+  const actif = (m) => (m.actif === undefined ? m.id !== "sport" : m.actif === true);
   const profDe = (m) => (actif(m) ? m.prof : "Margaux"); // prof pas encore arrivé : Margaux s'en charge
   const mat = (id) => mats().find((m) => m.id === id) || { id, nom: id || "Sans matière", prof: "Margaux", couleur: "#CBD2D9" };
 
   function save(mut) {
-    const d = S.get("academie") || {}; ["matieres", "devoirs", "seances", "idees"].forEach((k) => { if (!Array.isArray(d[k])) d[k] = []; });
+    const d = S.get("academie") || {}; ["matieres", "devoirs", "seances", "idees", "messages"].forEach((k) => { if (!Array.isArray(d[k])) d[k] = []; });
     mut(d); d.maj = now(); A = d; S.set("academie", d); render();
   }
   function toast(t) { const el = $("#toast"); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 2600); }
@@ -185,11 +213,12 @@
 
   // ---------- rendu ----------
   function render() {
-    $$(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.v === (view === "devoir" ? "devoirs" : view)));
+    $$(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.v === (view === "devoir" ? "devoirs" : view === "prof" ? "profs" : view)));
+    const nl = PERSONNES.reduce((n, pp) => n + nonLus(pp.id), 0), pb = $("#pf-badge"); pb.hidden = !nl; pb.textContent = nl;
     $$(".view").forEach((v) => (v.hidden = v.dataset.view !== view));
     const open = (A.devoirs || []).filter(OPEN);
     const b = $("#dv-badge"); b.hidden = !open.length; b.textContent = open.length;
-    ({ accueil: rAccueil, devoirs: rDevoirs, devoir: rDevoir, matieres: rMatieres, seances: rSeances, idees: rIdees, reglages: rReglages })[view]();
+    ({ accueil: rAccueil, devoirs: rDevoirs, devoir: rDevoir, profs: rProfs, prof: rProf, matieres: rMatieres, seances: rSeances, idees: rIdees, reglages: rReglages })[view]();
   }
 
   function rAccueil() {
@@ -275,7 +304,7 @@
       "<h1>" + esc(d.titre) + "</h1>" +
       '<div class="kv"><div class="k">Prochaine échéance</div><div class="v big' + (flou ? " verif" : "") + '" id="dv-next">' + (flou ? "À vérifier" : esc(echLabel(e))) + "</div>" +
       (flou && e.libelle ? '<div class="k"></div><div class="v meta">' + esc(e.libelle) + "</div>" : "") +
-      '<div class="k">Attribué à</div><div class="v" id="dv-prof"><span class="avatar" aria-hidden="true">' + esc(attribue.slice(0, 1)) + "</span>" + esc(attribue) + (attribue !== titulaire ? ' <span class="meta">en attendant ' + esc(titulaire) + ", prof de la matière</span>" : "") + "</div>" +
+      '<div class="k">Attribué à</div><div class="v" id="dv-prof"><span class="avatar" aria-hidden="true">' + esc(attribue.slice(0, 1)) + "</span>" + esc(attribue) + (attribue !== titulaire ? ' <span class="meta">' + (actif(m) ? "prof de la matière : " + esc(titulaire) : "en attendant " + esc(titulaire) + ", prof de la matière") + "</span>" : "") + "</div>" +
       '<div class="k">Statut</div><div class="v"><select data-st="' + esc(d.id) + '" aria-label="Statut du devoir">' + opts + "</select></div>" +
       '<div class="k">Agenda</div><div class="v" id="dv-agenda">' + esc(agTxt) + "</div></div>" +
       samuelHtml({ devoir: d, matiere: d.matiere }) +
@@ -350,6 +379,43 @@
     $("#se-list").innerHTML = list.length ? list.map((s) => { const m = mat(s.matiere); return '<div class="card se" style="--c:' + esc(col(m.couleur)) + '"><div class="se-top"><span class="chip" style="background:' + esc(col(m.couleur)) + '">' + esc(m.nom.split(" · ")[0]) + "</span><span class=\"meta\">" + esc(fdate(s.date)) + " · " + esc(s.prof || m.prof) + " · " + (s.mode === "oral" ? "oral" : "écrit") + (s.duree ? " · " + esc(s.duree) + " min" : "") + "</span></div>" + (s.bilan ? "<p>" + esc(s.bilan) + "</p>" : "") + (s.suite ? '<p class="hint"><b>Ensuite :</b> ' + esc(s.suite) + "</p>" : "") + (s.note ? '<p class="hint">Note : <code>' + esc(s.note) + "</code></p>" : "") + "</div>"; }).join("") : '<p class="empty">Pas encore de séance. La première, c\'est 20 minutes avec Nour ?</p>';
   }
 
+  // ---------- parler aux profs ----------
+  function avatarHtml(pp, big) { return '<span class="avatar' + (big ? " big" : "") + '" style="background:' + esc(couleurDe(pp)) + '" aria-hidden="true">' + esc(pp.nom.slice(0, 1)) + "</span>"; }
+  function rProfs() {
+    $("#pf-list").innerHTML = PERSONNES.map((pp) => {
+      const m = msgs(pp.id), last = m[m.length - 1], n = nonLus(pp.id), off = pp.matiere && !actif(mat(pp.matiere));
+      const etat = !last ? "" : last.de === "evan" ? (last.statut === "erreur" ? "Message non transmis" : "Ton message attend sa réponse") : "Dernière réponse " + fdate(last.at);
+      return '<a class="pf' + (off ? " off" : "") + '" href="#prof/' + esc(encodeURIComponent(pp.id)) + '">' + avatarHtml(pp) + '<div><b>' + esc(pp.nom) + (n ? ' <span class="badge">' + n + "</span>" : "") + '</b><span class="meta">' + esc(roleDe(pp)) + "</span><span class=\"acc\">" + esc(pp.accroche) + "</span>" + (etat ? '<span class="meta etat">' + esc(etat) + "</span>" : "") + "</div></a>";
+    }).join("");
+  }
+  function rProf() {
+    const pp = personne(current), el = $("#pf-conv");
+    if (!pp) { el.innerHTML = '<p class="empty">Personne introuvable. <a href="#profs">Retour</a></p>'; return; }
+    const m = msgs(pp.id), byId = {}; m.forEach((x) => (byId[x.id] = x));
+    const attente = m.filter((x) => x.de === "evan" && x.statut === "envoye").length;
+    el.innerHTML = '<a class="back-l" href="#profs">← Profs</a>' +
+      '<div class="card pf-head">' + avatarHtml(pp, true) + "<div><h1>" + esc(pp.nom) + '</h1><span class="meta">' + esc(roleDe(pp)) + "</span><p class=\"acc\">" + esc(pp.accroche) + "</p></div></div>" +
+      '<div class="card"><div class="thread" id="pf-thread">' + (m.length ? m.map((x) => '<div class="bulle ' + (x.de === "evan" ? "moi" : "lui") + '"><p class="pre">' + esc(x.texte) + '</p><span class="meta">' + (x.de === "evan" ? "Toi" : esc(pp.nom)) + " · " + esc(x.at ? new Date(x.at).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "") + (x.de === "evan" && x.statut === "erreur" ? " · non transmis" : "") + "</span></div>").join("") : '<p class="empty">Pas encore de message. Pose une question, demande une explication, un exercice ou un avis.</p>') + "</div>" +
+      (attente ? '<p class="hint" id="pf-attente">' + esc(pp.nom) + " répond au prochain passage de Margaux (une fois par heure). Tu peux fermer l'appli : la réponse arrivera ici.</p>" : "") +
+      '<form class="form" id="pf-form"><label class="sr" for="pf-text">Message pour ' + esc(pp.nom) + '</label><textarea id="pf-text" rows="3" maxlength="2000" placeholder="Écris à ' + esc(pp.nom) + '…"></textarea>' +
+      '<div class="row end"><button class="btn ghost" type="button" data-now>Tout de suite (bureau de Margaux)</button><button class="btn primary" type="submit">Envoyer</button></div></form></div>';
+    // les réponses affichées sont « vues » sur cet appareil
+    const lastProf = m.filter((x) => x.de === "prof").pop(); if (lastProf && lastProf.at) vuSet(pp.id, lastProf.at);
+    const pb = $("#pf-badge"), nl = PERSONNES.reduce((n, q) => n + nonLus(q.id), 0); pb.hidden = !nl; pb.textContent = nl;
+    const th = $("#pf-thread"); th.scrollTop = th.scrollHeight;
+    $("#pf-form").addEventListener("submit", (e) => {
+      e.preventDefault(); const texte = $("#pf-text").value.trim(); if (!texte) return;
+      save((d) => d.messages.push({ id: uid(), prof: pp.id, de: "evan", texte, at: now(), statut: "envoye", maj: now() }));
+      toast("Envoyé à " + pp.nom + " : réponse dans l'heure");
+    });
+    $("#pf-form [data-now]").addEventListener("click", async () => {
+      const texte = $("#pf-text").value.trim();
+      const txt = "Margaux, transmets à " + pp.nom + " (" + roleDe(pp) + ")" + (texte ? " : « " + texte + " »" : " : je voudrais lui parler maintenant.");
+      try { await navigator.clipboard.writeText(txt); toast("Message copié : colle-le dans le bureau de Margaux"); } catch (er) { toast("Copie impossible"); }
+      window.open(bureau(), "_blank", "noopener");
+    });
+  }
+
   function rIdees() {
     const list = (A.idees || []).slice().sort((a, b) => (b.created || "").localeCompare(a.created || ""));
     const ST = { nouveau: "Reçue", pris: "Prise en charge", fait: "Faite", refuse: "Écartée" };
@@ -365,7 +431,7 @@
 
   // ---------- navigation et formulaires ----------
   function go(v) { if (location.hash !== "#" + v) location.hash = v; else { view = v; render(); } }
-  function route() { let v = (location.hash || "#accueil").slice(1); try { v = decodeURIComponent(v); } catch (er) { v = "accueil"; } current = null; if (v.startsWith("devoir/")) { current = v.slice(7); v = "devoir"; } view = $('.view[data-view="' + v + '"]') ? v : "accueil"; render(); $("#main").focus({ preventScroll: true }); window.scrollTo(0, 0); }
+  function route() { let v = (location.hash || "#accueil").slice(1); try { v = decodeURIComponent(v); } catch (er) { v = "accueil"; } current = null; if (v.startsWith("devoir/")) { current = v.slice(7); v = "devoir"; } else if (v.startsWith("prof/")) { current = v.slice(5); v = "prof"; } view = $('.view[data-view="' + v + '"]') ? v : "accueil"; render(); $("#main").focus({ preventScroll: true }); window.scrollTo(0, 0); }
 
   function bind() {
     window.addEventListener("hashchange", route);
