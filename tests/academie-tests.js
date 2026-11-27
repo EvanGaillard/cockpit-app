@@ -34,11 +34,15 @@ const VIEWS = ["accueil", "devoirs", "matieres", "seances", "idees", "reglages"]
     const mock = new MockGitHub(DATA);
     const { ctx, page } = await setup(opts, mock);
     check(label + " : Cockpit réglé", await cockpitConnect(page));
+    await page.goto(BASE + "#aujourdhui");
+    await page.click(".acadlink");
+    check(label + " : bouton « Académie » du Cockpit ouvre l'Académie", await until(async () => (await page.title()) === "Académie"));
     await page.goto(BASE + "academie/");
     check(label + " : réglages du Cockpit repris tout seuls, synchro « À jour »", await until(async () => (await page.textContent("#sync-t")) === "À jour"));
     check(label + " : recommandation = devoir urgent", await until(async () => /Compte rendu de TP/.test(await page.textContent("#reco"))));
     const slug = label.split(" ")[0];
     for (const v of VIEWS) { await page.evaluate((h) => (location.hash = h), v); await page.waitForTimeout(150); check(label + " : pas de défilement horizontal · " + v, await noH(page)); await page.screenshot({ path: path.join(SHOTS, slug + "-" + v + ".png"), fullPage: true }); }
+    check(label + " : lien « ← Cockpit » présent", (await page.getAttribute(".back", "href")) === "../");
     await page.evaluate(() => (location.hash = "matieres"));
     check(label + " : 13 matières, 12 en attente (seule la philo est active)", (await page.locator(".mat").count()) === 13 && (await page.locator(".mat.off").count()) === 12);
     await ctx.close();

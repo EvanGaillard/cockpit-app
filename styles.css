@@ -361,7 +361,7 @@ button.tag { background: none; border: 0; padding: 0; cursor: pointer; }
   .app { display: block; }
   .rail { position: fixed; z-index: 20; top: auto; left: 0; right: 0; bottom: 0; width: auto; height: auto; flex-direction: row; justify-content: space-around; align-items: center; gap: 0; border-right: 0; border-top: 1.5px solid var(--ink); border-radius: 22px 22px 0 0; background: var(--white);
     padding: 8px max(12px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
-  .brand, .sync, .nav .lbl { display: none; }
+  .brand, .sync, .acad, .nav .lbl { display: none; }
   .nav { display: contents; }
   .nav a { width: 44px; height: 48px; justify-content: center; padding: 0; position: relative; }
   .nav .badge { position: absolute; top: 3px; right: -2px; margin: 0; }
@@ -411,3 +411,7 @@ details.adv summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 /* tuile à deux colonnes (« Ensuite ») : étiquettes sous le titre, sinon un titre long n'a plus de place */
 .tile.s2 .row { grid-template-columns: auto minmax(0, 1fr) auto; }
 .tile.s2 .row .tags { grid-column: 2 / 4; grid-row: 2; justify-content: flex-start; }
+.acad { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; color: var(--ink); text-decoration: none; font-weight: 600; border: 1.5px dashed var(--line); }
+.acad:hover { background: var(--white); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }
+.acadlink { font-weight: 700; }
