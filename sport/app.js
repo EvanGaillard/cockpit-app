@@ -5,7 +5,9 @@
  *   sid (identifiant de séance, évite les doublons), source: "sport"|"sante", hors (séance hors planning), douleur,
  *   muscu  : debut, fin, duree (min), exos:[{id, nom, series:[{id, reps, kg}]}]
  *   course : duree_s, distance (km), allure ("m:ss" par km), fc (bpm)
- * Séance hors planning ou deuxième séance du même jour : clé "AAAA-MM-JJ:course:2" (le Cockpit l'ignore, l'historique la montre).
+ * Séance hors planning : clé du jour si elle est libre, avec hors: true. Deuxième séance du même type le même jour : clé "AAAA-MM-JJ:course:2"
+ * (le Cockpit l'ignore, l'historique la montre). Limite connue : deux appareils hors ligne qui enregistrent la même clé le même jour
+ * seraient fusionnés en une seule séance à la synchronisation (cas rare, documenté).
  * Séance en cours (muscu) : brouillon sur l'appareil (localStorage), écrit dans le dépôt seulement à « Terminer ». */
 (function () {
   "use strict";
@@ -82,6 +84,9 @@
     draft = { sid: uid(), date: date || today(), debut: new Date().toISOString(), exos: [], repos: null };
     saveDraft(); go("muscu");
   }
+  let audio = null;
+  function unlockAudio() { try { if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)(); if (audio.state === "suspended") audio.resume(); } catch (e) { audio = null; } }
+  function bip() { try { if (!audio || document.visibilityState !== "visible") return; [0, 0.25, 0.5].forEach((t) => { const o = audio.createOscillator(), g = audio.createGain(); o.frequency.value = 880; g.gain.value = 0.15; o.connect(g); g.connect(audio.destination); o.start(audio.currentTime + t); o.stop(audio.currentTime + t + 0.15); }); } catch (e) { /* pas de son */ } }
   function restLeft() { return draft && draft.repos ? Math.max(0, (draft.repos.fin - Date.now()) / 1000) : 0; }
   function startRest(sec) { draft.repos = { fin: Date.now() + sec * 1000, dur: sec, vibre: false }; saveDraft(); tick(); }
 
@@ -98,13 +103,14 @@
     const t = today(), pv = prevu(t), d0 = store.get(DRAFT, null);
     const fait = Object.keys(log()).filter((k) => k.startsWith(t + ":") && isSport(k, log()[k]) && log()[k].done);
     let h = '<h1 class="cap">' + esc(fdate(t)) + "</h1>";
-    if (d0 && d0.sid) h += '<div class="card hero"><p class="eyebrow">Séance en cours</p><h2>Muscu · ' + d0.exos.length + " exercice" + (d0.exos.length > 1 ? "s" : "") + '</h2><a class="btn big primary" href="#muscu" id="j-reprendre">Reprendre la séance</a></div>';
+    if (d0 && d0.sid) h += '<div class="card hero"><p class="eyebrow">Séance en cours' + (d0.date !== t ? " · commencée " + esc(fshort(d0.date)) : "") + '</p><h2>Muscu · ' + d0.exos.length + " exercice" + (d0.exos.length > 1 ? "s" : "") + '</h2><a class="btn big primary" href="#muscu" id="j-reprendre">Reprendre la séance</a>' + (d0.date !== t ? '<button class="btn" type="button" id="j-jeter">Jeter cette ancienne séance</button>' : "") + "</div>";
     else if (pv === "muscu") h += '<div class="card hero"><p class="eyebrow">Séance prévue</p><h2>Muscu</h2>' + (fait.some((k) => typeOf(k) === "muscu") ? '<p class="ok">✓ Faite aujourd\'hui</p>' : '<button class="btn big primary" type="button" data-go="muscu">Commencer la muscu</button>') + "</div>";
     else if (pv === "course") h += '<div class="card hero"><p class="eyebrow">Séance prévue</p><h2>Course</h2>' + (fait.some((k) => typeOf(k) === "course") ? '<p class="ok">✓ Faite aujourd\'hui</p>' : '<button class="btn big primary" type="button" data-go="course">Enregistrer la course</button>') + "</div>";
     else h += '<div class="card hero"><p class="eyebrow">' + (pv === "repos" ? "Lundi : repos" : t < PLAN_START ? "Le programme commence le 30 novembre" : "Pas de séance prévue") + "</p><h2>" + (pv === "repos" ? "Récupération" : "Séance libre") + "</h2></div>";
     h += '<div class="card"><p class="eyebrow">Hors planning</p><div class="row"><button class="btn big" type="button" data-go="muscu-hors">Muscu</button><button class="btn big" type="button" data-go="course-hors">Course</button></div></div>';
     if (fait.length) h += '<div class="card"><p class="eyebrow">Aujourd\'hui</p>' + fait.map(lineHtml).join("") + "</div>";
     $("#jour").innerHTML = h;
+    const jt = $("#j-jeter"); if (jt) jt.addEventListener("click", () => { if (!confirm("Jeter la séance commencée " + fshort(d0.date) + " ?")) return; store.del(DRAFT); draft = null; rJour(); });
     $$("#jour [data-go]").forEach((b) => b.addEventListener("click", () => { const g = b.dataset.go; if (g.startsWith("muscu")) startMuscu(today()); else { courseSid = null; go("course"); } }));
   }
 
@@ -122,20 +128,22 @@
         '<button class="btn big primary" type="button" data-addser="' + i + '">+ Série ' + (x.series.length + 1) + "</button></div>";
     }).join("");
     h += '<form class="card" id="m-exo"><label for="m-nom">Nouvel exercice</label><input id="m-nom" list="m-noms" maxlength="60" placeholder="Ex. développé couché" autocomplete="off"><datalist id="m-noms">' + noms.map((n) => '<option value="' + esc(n) + '">').join("") + '</datalist><button class="btn big" type="submit">Ajouter l\'exercice</button></form>';
-    h += '<div class="card" id="m-fin"><button class="btn big" type="button" id="m-terminer">Terminer la séance</button></div>';
+    h += '<div class="card" id="m-fin"><button class="btn big" type="button" id="m-terminer">Terminer la séance</button><button class="lnk" type="button" id="m-abandon">Abandonner la séance (rien n\'est enregistré)</button></div>';
     h += '<div class="rest" id="m-rest" hidden><div><span class="eyebrow">Repos</span><span class="rest-t" id="m-rest-t" aria-live="polite">0:00</span></div><div class="row"><button class="btn" type="button" data-rest="-15">−15 s</button><button class="btn" type="button" data-rest="15">+15 s</button><button class="btn" type="button" data-rest="stop">Passer</button></div></div>';
     $("#muscu").innerHTML = h;
     $$("#muscu [data-step]").forEach((b) => b.addEventListener("click", () => { const [f, dv, i] = b.dataset.step.split(":"); const inp = $("#" + f + "-" + i); const v = (num(inp.value) || 0) + Number(dv); inp.value = Math.max(0, f === "reps" ? Math.round(v) : Math.round(v * 10) / 10); }));
     $$("#muscu [data-addser]").forEach((b) => b.addEventListener("click", () => {
       const i = Number(b.dataset.addser), reps = Math.round(num($("#reps-" + i).value) || 0), kg = num($("#kg-" + i).value) || 0;
       if (!reps) { toast("Indique le nombre de répétitions"); return; }
+      unlockAudio();
       draft.exos[i].series.push({ id: uid(), reps, kg }); saveDraft(); startRest(reposDef()); rMuscu(); toast("Série enregistrée · repos " + mmss(reposDef()));
     }));
     $$("#muscu [data-delser]").forEach((b) => b.addEventListener("click", () => { const [i, j] = b.dataset.delser.split(":").map(Number); draft.exos[i].series.splice(j, 1); saveDraft(); rMuscu(); }));
     $$("#muscu [data-delexo]").forEach((b) => b.addEventListener("click", () => { const i = Number(b.dataset.delexo); if (draft.exos[i].series.length && !confirm("Retirer " + draft.exos[i].nom + " et ses séries ?")) return; draft.exos.splice(i, 1); saveDraft(); rMuscu(); }));
     $("#m-exo").addEventListener("submit", (e) => { e.preventDefault(); const nom = $("#m-nom").value.trim(); if (!nom) return; draft.exos.push({ id: uid(), nom, series: [] }); saveDraft(); rMuscu(); });
     $$("#muscu [data-rest]").forEach((b) => b.addEventListener("click", () => { if (!draft.repos) return; const v = b.dataset.rest; if (v === "stop") draft.repos = null; else draft.repos.fin += Number(v) * 1000; saveDraft(); tick(); }));
-    $("#m-terminer").addEventListener("click", () => finishForm("muscu"));
+    $("#m-terminer").addEventListener("click", () => { if (!draft.exos.some((x) => x.series.length)) { toast("Aucune série : ajoute une série, ou abandonne la séance"); return; } finishForm("muscu"); });
+    $("#m-abandon").addEventListener("click", () => { if (!confirm("Abandonner la séance ? Les séries saisies ne seront pas enregistrées.")) return; store.del(DRAFT); draft = null; $("#muscu").innerHTML = ""; toast("Séance abandonnée"); go("jour"); });
     tick();
   }
 
@@ -155,7 +163,7 @@
     box.scrollIntoView({ block: "center" });
   }
   function finishMuscu(r, douleur, note) {
-    const d = draft, fin = new Date(), duree = Math.max(1, Math.round((fin - new Date(d.debut)) / 60000));
+    const d = draft, fin = new Date(), duree = Math.min(300, Math.max(1, Math.round((fin - new Date(d.debut)) / 60000)));
     const exos = d.exos.filter((x) => x.series.length);
     const conseils = henriMuscu(exos, douleur);
     const entry = { done: true, type: "muscu", sid: d.sid, source: "sport", date: d.date, r: r || null, a: String(duree), b: exos.map((x) => x.nom).join(", ").slice(0, 80), note: note.slice(0, 600), at: fin.toISOString(), debut: d.debut, fin: fin.toISOString(), duree, exos };
@@ -214,6 +222,8 @@
   }
   let importSrc = "sport";
   function finishCourse(r, douleur, note) {
+    const s0 = (num($("#c-h").value) || 0) * 3600 + (num($("#c-m").value) || 0) * 60 + (num($("#c-s").value) || 0), km0 = num($("#c-km").value);
+    if (!$("#c-date").value || !s0 || !km0) { toast("Il faut la date, la durée et la distance"); const b = $("#f-ok"); if (b) b.disabled = false; return; }
     const date = $("#c-date").value, s = Math.round((num($("#c-h").value) || 0) * 3600 + (num($("#c-m").value) || 0) * 60 + (num($("#c-s").value) || 0)), km = Math.round(num($("#c-km").value) * 100) / 100, fc = num($("#c-fc").value);
     const conseils = henriCourse(date, km, douleur);
     const entry = { done: true, type: "course", sid: courseSid, source: importSrc, date, r: r || null, a: String(km), b: mmss(s), note: note.slice(0, 600), at: new Date().toISOString(), duree_s: s, distance: km, allure: mmss(s / km) };
@@ -272,7 +282,7 @@
     if (!draft || !draft.repos) { rest.hidden = true; return; }
     const left = restLeft(); rest.hidden = false; $("#m-rest-t").textContent = left > 0 ? mmss(left) : "C'est reparti";
     rest.classList.toggle("fini", left <= 0);
-    if (left <= 0 && !draft.repos.vibre) { draft.repos.vibre = true; saveDraft(); try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { /* rien */ } }
+    if (left <= 0 && !draft.repos.vibre) { draft.repos.vibre = true; saveDraft(); bip(); try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { /* rien */ } }
   }
 
   function go(v) { if (location.hash !== "#" + v) location.hash = v; else route(); }

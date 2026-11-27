@@ -66,6 +66,17 @@ async function until(fn, ms) { const t0 = Date.now(); while (Date.now() - t0 < (
     check(label + " · Henri signale +31 % de charge (40 → 52,5 kg)", await until(async () => /Henri/.test(await page.textContent("#seance")) && /\+31 %/.test(await page.textContent("#seance"))));
     check(label + " · détail de la séance : séries relisibles", /8 × 50 kg/.test(await page.textContent("#seance")));
     await page.screenshot({ path: path.join(SHOTS, slug + "-2-muscu-fin.png"), fullPage: true });
+    // le Cockpit lit la séance écrite par l'appli Sport
+    await page.goto(BASE + "#semaine");
+    check(label + " · le Cockpit affiche la muscu comme faite (ressenti 4/5)", await until(async () => /✓ fait · ressenti 4\/5/.test(await page.textContent("main"))));
+    // séance vide refusée, puis abandon
+    await page.goto(BASE + "sport/#jour"); await page.click('#jour [data-go="muscu-hors"]');
+    await page.click("#m-terminer");
+    check(label + " · « Terminer » sans série : refusé", await until(async () => /Aucune série/.test(await page.textContent("#toast"))) && (await page.locator("#f-ok").count()) === 0);
+    page.once("dialog", (d) => d.accept());
+    const nb = Object.keys(L()).length;
+    await page.click("#m-abandon");
+    check(label + " · abandonner : brouillon supprimé, rien d'enregistré", await until(async () => (await page.locator("#j-reprendre").count()) === 0 && /Muscu/.test(await page.textContent("#jour"))) && Object.keys(L()).length === nb);
 
     // ----- COURSE hors planning (mardi) -----
     await page.goto(BASE + "sport/#jour"); await page.click('#jour [data-go="course-hors"]');
@@ -83,6 +94,8 @@ async function until(fn, ms) { const t0 = Date.now(); while (Date.now() - t0 < (
     // deuxième sortie le même jour + import Apple Santé (texte du raccourci)
     await page.goto(BASE + "sport/#jour"); await page.click('#jour [data-go="course-hors"]');
     await page.click("#c-import summary");
+    await page.fill("#c-paste", "{pas du json"); await page.click("#c-lire");
+    check(label + " · import mal formé : refusé sans erreur", await until(async () => /non reconnu/.test(await page.textContent("#toast"))) && (await page.inputValue("#c-km")) === "");
     await page.fill("#c-paste", '{"date":"2026-12-01","duree_s":1935,"distance_km":5.2,"fc":148}'); await page.click("#c-lire");
     check(label + " · import : champs remplis (32:15, 5,2 km, 148 bpm)", (await page.inputValue("#c-m")) === "32" && (await page.inputValue("#c-s")) === "15" && (await page.inputValue("#c-km")) === "5,2" && (await page.inputValue("#c-fc")) === "148");
     check(label + " · import : allure 6:12 /km", (await page.textContent("#c-allure")).trim() === "6:12 /km");

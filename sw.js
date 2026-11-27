@@ -1,7 +1,7 @@
 /* Cockpit app · service worker : met l'app en cache pour qu'elle s'ouvre sans réseau.
  * Les appels à l'API GitHub ne passent jamais par le cache (les données sont gérées par store.js et IndexedDB).
  * Pour publier une nouvelle version : changer VERSION, l'app propose alors « Recharger ».
- * Un changement de store.js ou merge.js oblige AUSSI à changer VERSION dans academie/sw.js (qui les met en cache). */
+ * Un changement de store.js ou merge.js oblige AUSSI à changer VERSION dans academie/sw.js et sport/sw.js (qui les mettent en cache). */
 const VERSION = "cockpit-app-1.0.4";
 const SHELL = [
   "./", "index.html", "styles.css", "merge.js", "store.js", "app.js", "manifest.webmanifest",
