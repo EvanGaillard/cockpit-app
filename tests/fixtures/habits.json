@@ -1,0 +1,21 @@
+{
+ "items": [
+  {
+   "id": "hdemo001",
+   "name": "Lire 20 min"
+  },
+  {
+   "id": "hdemo002",
+   "name": "Sport"
+  },
+  {
+   "id": "hdemo003",
+   "name": "Coucher tôt"
+  }
+ ],
+ "log": {
+  "2026-01-02": [
+   "hdemo001"
+  ]
+ }
+}

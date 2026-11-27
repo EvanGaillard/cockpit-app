@@ -1,7 +1,7 @@
 /* Cockpit app · service worker : met l'app en cache pour qu'elle s'ouvre sans réseau.
  * Les appels à l'API GitHub ne passent jamais par le cache (les données sont gérées par store.js et IndexedDB).
  * Pour publier une nouvelle version : changer VERSION, l'app propose alors « Recharger ». */
-const VERSION = "cockpit-app-1.0.0";
+const VERSION = "cockpit-app-1.0.1";
 const SHELL = [
   "./", "index.html", "styles.css", "merge.js", "store.js", "app.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png",

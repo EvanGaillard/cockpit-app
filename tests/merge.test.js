@@ -93,7 +93,7 @@ t("equipe : numéro de ticket en double renuméroté", () => {
 
 t("format d'écriture identique aux fichiers du dépôt (clés triées, indentation 1)", () => {
   const fs = require("fs"), path = require("path");
-  const dir = path.join(__dirname, "..", "..", "data");
+  const dir = path.join(__dirname, "fixtures"); // données fictives
   for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".json"))) {
     const txt = fs.readFileSync(path.join(dir, f), "utf8");
     assert.strictEqual(M.stableStringify(JSON.parse(txt)), txt.replace(/\n$/, ""), f);

@@ -16,7 +16,7 @@
   const DOCS = ["tasks", "habits", "goals", "mood", "inbox", "brief", "day", "planning", "equipe"];
   const READONLY = new Set(["brief"]); // écrit seulement par les routines de Léon
   const EMPTY = { tasks: { items: [] }, habits: { items: [], log: {} }, goals: { items: [] }, mood: { log: {} }, inbox: { items: [] }, brief: {}, day: {}, planning: {}, equipe: { tickets: [] } };
-  const DEFAULTS = { owner: "EvanGaillard", repo: "Claude-2nd-Brain", branch: "main", dir: "Systeme/Cockpit/data" };
+  const DEFAULTS = { owner: "", repo: "", branch: "main", dir: "data" }; // aucun compte pré-rempli : l'utilisateur saisit son dépôt privé (ex. leon-data) dans Réglages
   const API = "https://api.github.com";
   const PUSH_DELAY = 3000, POLL_MS = 60000; // 3 s : plusieurs gestes rapprochés = un seul commit
 
@@ -56,6 +56,8 @@
   const pendingCount = () => DOCS.filter((n) => recs[n] && recs[n].dirty).length;
   const persist = (n) => idb("docs", "readwrite", (s) => s.put(recs[n])).catch((e) => console.error("IndexedDB", e));
   const hasToken = () => !!settings.token;
+  const isConfigured = () => !!(settings.owner && settings.repo);
+  const repoKey = (s) => s.owner + "/" + s.repo + "@" + s.branch + ":" + s.dir;
 
   async function init() {
     const saved = (await kvGet("settings").catch(() => null)) || {};
@@ -75,6 +77,7 @@
 
   function refreshStatus() {
     const p = pendingCount();
+    if (!isConfigured()) return setStatus("off", p ? "Sur cet appareil · dépôt à configurer" : "Dépôt à configurer (Réglages)");
     if (!hasToken()) return setStatus("off", p ? "Sur cet appareil · jeton à saisir" : "Jeton à saisir (Réglages)");
     if (fatal) return setStatus("err", fatal);
     if (!navigator.onLine) return setStatus("wait", p ? "Hors ligne · " + p + " doc. à envoyer" : "Hors ligne");
@@ -168,7 +171,7 @@
 
   function sync() {
     if (syncing) return syncing.then(() => (pendingCount() ? sync() : undefined));
-    if (!hasToken()) { refreshStatus(); return Promise.resolve(); }
+    if (!hasToken() || !isConfigured()) { refreshStatus(); return Promise.resolve(); }
     if (!navigator.onLine) { refreshStatus(); return Promise.resolve(); }
     syncing = (async () => {
       setStatus("wait", "Synchronisation…");
@@ -192,17 +195,38 @@
   }
 
   // ---------- réglages ----------
+  // Changement de dépôt sûr : on refuse tant que des écritures ne sont pas envoyées ; sinon on ARCHIVE la copie
+  // locale de l'ancien dépôt (IndexedDB, clé « archive:… ») puis on repart de zéro : les données du nouveau dépôt
+  // sont relues, aucune donnée de l'ancien dépôt n'y est poussée.
+  async function archiveLocal(reason) {
+    const key = "archive:" + repoKey(settings) + ":" + new Date().toISOString();
+    const docs = {}; DOCS.forEach((n) => (docs[n] = M.clone(recs[n])));
+    await kvSet(key, { reason, at: new Date().toISOString(), settings: { owner: settings.owner, repo: settings.repo, branch: settings.branch, dir: settings.dir }, docs });
+    const idx = (await kvGet("archives").catch(() => null)) || [];
+    idx.push(key); await kvSet("archives", idx);
+    return key;
+  }
+  function resetLocal() {
+    DOCS.forEach((n) => { recs[n] = { name: n, data: M.clone(EMPTY[n]), base: undefined, sha: null, dirty: false, editedAt: null }; persist(n); emit("change", n, M.clone(EMPTY[n]), "reset"); });
+  }
   async function saveSettings(s) {
+    if (syncing) await syncing.catch(() => {}); // ne jamais changer de dépôt au milieu d'un envoi
     const next = Object.assign({}, settings, s);
-    ["owner", "repo", "branch", "dir"].forEach((k) => { next[k] = String(next[k] || DEFAULTS[k]).trim() || DEFAULTS[k]; });
+    ["owner", "repo", "branch", "dir"].forEach((k) => { next[k] = String(next[k] == null ? DEFAULTS[k] : next[k]).trim() || DEFAULTS[k]; });
     next.token = String(next.token || "").trim();
     const repoChanged = ["owner", "repo", "branch", "dir"].some((k) => next[k] !== settings[k]);
+    if (repoChanged && isConfigured()) {
+      if (pendingCount()) return { ok: false, text: "Changement de dépôt refusé : " + pendingCount() + " document(s) pas encore envoyé(s) vers " + settings.owner + "/" + settings.repo + ". Reconnecte-toi au réseau et attends « À jour », puis recommence." };
+      await archiveLocal("changement de dépôt");
+      resetLocal();
+    }
     settings = next;
     await kvSet("settings", { owner: next.owner, repo: next.repo, branch: next.branch, dir: next.dir });
     if (next.token) await kvSet("token", next.token); else await kvDel("token");
     if (repoChanged) DOCS.forEach((n) => { recs[n].sha = null; recs[n].base = undefined; persist(n); });
     fatal = null; refreshStatus();
-    return sync();
+    await sync();
+    return { ok: true };
   }
   async function testToken(s) {
     const t = Object.assign({}, settings, s);
@@ -213,16 +237,21 @@
       return { ok: true, text: "Jeton valide : accès au dépôt " + (repo && repo.full_name ? repo.full_name : t.repo) + "." };
     } catch (e) { return { ok: false, text: explain(e) || (e.status === 0 ? "Pas de réseau." : "Erreur GitHub : " + e.message) }; }
   }
-  async function forgetDevice() {
+  async function forgetDevice(opts) {
+    if (syncing) await syncing.catch(() => {});
+    if (pendingCount() && !(opts && opts.force)) return { ok: false, text: "Rien n'est effacé : " + pendingCount() + " document(s) pas encore envoyé(s). Attends « À jour » d'abord." };
+    if (isConfigured()) await archiveLocal("oubli de l'appareil");
     await kvDel("token"); settings.token = "";
     await idb("docs", "readwrite", (s) => s.clear());
     DOCS.forEach((n) => { recs[n] = { name: n, data: M.clone(EMPTY[n]), base: undefined, sha: null, dirty: false, editedAt: null }; emit("change", n, M.clone(EMPTY[n]), "reset"); });
     refreshStatus();
+    return { ok: true };
   }
-  const getSettings = () => ({ owner: settings.owner, repo: settings.repo, branch: settings.branch, dir: settings.dir, hasToken: hasToken() });
+  const archives = async () => (await kvGet("archives").catch(() => null)) || [];
+  const getSettings = () => ({ owner: settings.owner, repo: settings.repo, branch: settings.branch, dir: settings.dir, hasToken: hasToken(), configured: isConfigured() });
 
   root.CockpitStore = {
-    DOCS, init, get, set, sync, flushNow, saveSettings, getSettings, testToken, forgetDevice,
+    DOCS, init, get, set, sync, flushNow, saveSettings, getSettings, testToken, forgetDevice, archives,
     status: () => status, pending: pendingCount,
     on: (ev, fn) => { listeners[ev].push(fn); },
   };
