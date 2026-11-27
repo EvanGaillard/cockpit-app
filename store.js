@@ -13,9 +13,13 @@
 (function (root) {
   "use strict";
   const M = root.CockpitMerge;
-  const DOCS = ["tasks", "habits", "goals", "mood", "inbox", "brief", "day", "planning", "equipe"];
-  const READONLY = new Set(["brief"]); // écrit seulement par les routines de Léon
-  const EMPTY = { tasks: { items: [] }, habits: { items: [], log: {} }, goals: { items: [] }, mood: { log: {} }, inbox: { items: [] }, brief: {}, day: {}, planning: {}, equipe: { tickets: [] } };
+  // Une autre app du même site (ex. academie/) peut définir self.STORE_CONFIG avant de charger ce fichier :
+  // {dbName, docs, readonly, empty, importFrom}. Sans STORE_CONFIG, c'est le Cockpit (comportement inchangé).
+  const CFG = root.STORE_CONFIG || {};
+  const DOCS = CFG.docs || ["tasks", "habits", "goals", "mood", "inbox", "brief", "day", "planning", "equipe"];
+  const READONLY = new Set(CFG.readonly || ["brief"]); // brief : écrit seulement par les routines de Léon
+  const EMPTY = Object.assign({ tasks: { items: [] }, habits: { items: [], log: {} }, goals: { items: [] }, mood: { log: {} }, inbox: { items: [] }, brief: {}, day: {}, planning: {}, equipe: { tickets: [] } }, CFG.empty || {});
+  const DB_NAME = CFG.dbName || "cockpit-app";
   const DEFAULTS = { owner: "", repo: "", branch: "main", dir: "data" }; // aucun compte pré-rempli : l'utilisateur saisit son dépôt privé (ex. leon-data) dans Réglages
   const API = "https://api.github.com";
   const PUSH_DELAY = 3000, POLL_MS = 60000; // 3 s : plusieurs gestes rapprochés = un seul commit
@@ -25,7 +29,7 @@
   function db() {
     if (dbp) return dbp;
     dbp = new Promise((resolve, reject) => {
-      const rq = indexedDB.open("cockpit-app", 1);
+      const rq = indexedDB.open(DB_NAME, 1);
       rq.onupgradeneeded = () => { const d = rq.result; if (!d.objectStoreNames.contains("docs")) d.createObjectStore("docs", { keyPath: "name" }); if (!d.objectStoreNames.contains("kv")) d.createObjectStore("kv"); };
       rq.onsuccess = () => resolve(rq.result);
       rq.onerror = () => reject(rq.error);
@@ -59,9 +63,37 @@
   const isConfigured = () => !!(settings.owner && settings.repo);
   const repoKey = (s) => s.owner + "/" + s.repo + "@" + s.branch + ":" + s.dir;
 
+  // Réglages d'une autre app du même site (ex. le Cockpit) : on les lit seulement si sa base existe déjà,
+  // pour ne jamais la créer vide (elle ne serait plus initialisée correctement ensuite).
+  async function importSettings(name) {
+    try {
+      if (!indexedDB.databases) return null;
+      const list = await indexedDB.databases();
+      if (!list.some((d) => d.name === name)) return null;
+      const d = await new Promise((res, rej) => { const rq = indexedDB.open(name); rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error); });
+      if (!d.objectStoreNames.contains("kv")) { d.close(); return null; }
+      const read = (k) => new Promise((res) => { const r = d.transaction("kv", "readonly").objectStore("kv").get(k); r.onsuccess = () => res(r.result); r.onerror = () => res(null); });
+      const out = { settings: await read("settings"), token: await read("token") }; d.close();
+      return out.settings && out.settings.owner ? out : null;
+    } catch (e) { return null; }
+  }
+  async function useSettingsFrom(name) {
+    const got = await importSettings(name || CFG.importFrom);
+    if (!got) return { ok: false, text: "Aucun réglage trouvé dans le Cockpit de cet appareil." };
+    return saveSettings(Object.assign({}, got.settings, { token: got.token || "" }));
+  }
+
   async function init() {
-    const saved = (await kvGet("settings").catch(() => null)) || {};
-    settings = Object.assign({}, DEFAULTS, saved, { token: (await kvGet("token").catch(() => "")) || "" });
+    let saved = (await kvGet("settings").catch(() => null)) || {};
+    let token = (await kvGet("token").catch(() => "")) || "";
+    if (CFG.importFrom) {
+      // réglages partagés : relus dans l'app d'origine à chaque lancement ; le jeton n'est JAMAIS recopié ici,
+      // donc « Oublier cet appareil » ou un nouveau jeton dans le Cockpit s'appliquent aussi à cette app
+      const got = await importSettings(CFG.importFrom);
+      if (got) { saved = got.settings; await kvSet("settings", saved); }
+      token = got ? got.token || "" : "";
+    }
+    settings = Object.assign({}, DEFAULTS, saved, { token });
     const all = (await idb("docs", "readonly", (s) => s.getAll()).catch(() => [])) || [];
     all.forEach((r) => { if (DOCS.includes(r.name)) recs[r.name] = r; });
     DOCS.forEach((n) => { if (!recs[n]) recs[n] = { name: n, data: M.clone(EMPTY[n]), base: undefined, sha: null, dirty: false, editedAt: null }; });
@@ -222,7 +254,8 @@
     }
     settings = next;
     await kvSet("settings", { owner: next.owner, repo: next.repo, branch: next.branch, dir: next.dir });
-    if (next.token) await kvSet("token", next.token); else await kvDel("token");
+    if (CFG.importFrom) await kvDel("token"); // jeton partagé : jamais stocké dans cette base
+    else if (next.token) await kvSet("token", next.token); else await kvDel("token");
     if (repoChanged) DOCS.forEach((n) => { recs[n].sha = null; recs[n].base = undefined; persist(n); });
     fatal = null; refreshStatus();
     await sync();
@@ -251,7 +284,7 @@
   const getSettings = () => ({ owner: settings.owner, repo: settings.repo, branch: settings.branch, dir: settings.dir, hasToken: hasToken(), configured: isConfigured() });
 
   root.CockpitStore = {
-    DOCS, init, get, set, sync, flushNow, saveSettings, getSettings, testToken, forgetDevice, archives,
+    DOCS, init, get, set, sync, useSettingsFrom, flushNow, saveSettings, getSettings, testToken, forgetDevice, archives,
     status: () => status, pending: pendingCount,
     on: (ev, fn) => { listeners[ev].push(fn); },
   };

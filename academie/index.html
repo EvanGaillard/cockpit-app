@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Académie</title>
+<meta name="description" content="L'Académie : tes profs, tes devoirs et tes séances, au même endroit.">
+<meta name="theme-color" content="#EEF3F1">
+<meta name="color-scheme" content="light">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Académie">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="../icons/icon-192.png">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <svg class="peaks" viewBox="0 0 1200 160" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 160 L0 110 L120 60 L210 100 L330 30 L460 105 L560 70 L690 120 L800 50 L930 110 L1040 75 L1200 115 L1200 160 Z" fill="var(--hill-2)"/>
+      <path d="M330 30 L360 48 L345 47 L330 58 L318 46 L302 50 Z M800 50 L826 66 L812 65 L800 74 L790 64 L776 67 Z" fill="#fff" opacity=".9"/>
+      <path d="M0 160 L0 135 L160 105 L300 130 L470 98 L640 135 L820 108 L1000 138 L1200 112 L1200 160 Z" fill="var(--hill-1)"/>
+    </svg>
+    <div class="top-in">
+      <a class="brand" href="#accueil">Académie</a>
+      <span class="sub" id="greet">Margaux et l'équipe</span>
+      <a class="sync" href="#reglages" aria-label="Synchronisation et réglages"><span class="dot wait" id="sync-dot"></span><span id="sync-t">Démarrage…</span></a>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Navigation">
+    <a href="#accueil" data-v="accueil">Accueil</a>
+    <a href="#devoirs" data-v="devoirs">Devoirs<span class="badge" id="dv-badge" hidden></span></a>
+    <a href="#matieres" data-v="matieres">Matières</a>
+    <a href="#seances" data-v="seances">Séances</a>
+    <a href="#idees" data-v="idees">Idées</a>
+    <a href="#reglages" data-v="reglages" class="gear" aria-label="Réglages">⚙︎</a>
+  </nav>
+
+  <main id="main" tabindex="-1">
+    <section class="view" data-view="accueil">
+      <div id="reco"></div>
+      <div class="grid2">
+        <div class="card"><h2>Prochains devoirs</h2><div id="next-dv"></div></div>
+        <div class="card"><h2>Équilibre des matières</h2><p class="hint">Les 14 derniers jours. Rien n'est en retard : c'est une boussole.</p><div id="balance"></div></div>
+      </div>
+      <div class="card" id="mot"></div>
+    </section>
+
+    <section class="view" data-view="devoirs">
+      <div class="head"><h1>Devoirs</h1><button class="btn" type="button" id="dv-add-open">+ Ajouter</button></div>
+      <p class="hint">Odile repère les travaux dans tes mails et sur Moodle, puis le prof responsable propose un premier rendu. Pour un travail noté, ce rendu est une base que tu retravailles toi-même.</p>
+      <form class="card form" id="dv-form" hidden>
+        <label>Titre<input id="dv-titre" required maxlength="160"></label>
+        <div class="row"><label>Matière<select id="dv-mat"></select></label><label>Pour le<input id="dv-due" type="date"></label></div>
+        <label>Documents ou consigne (facultatif)<input id="dv-docs" maxlength="300"></label>
+        <div class="row end"><button class="btn ghost" type="button" id="dv-cancel">Annuler</button><button class="btn primary" type="submit">Ajouter</button></div>
+      </form>
+      <div class="filters" id="dv-filters"></div>
+      <div id="dv-list"></div>
+    </section>
+
+    <section class="view" data-view="matieres">
+      <div class="head"><h1>Matières</h1></div>
+      <div class="mats" id="mats"></div>
+    </section>
+
+    <section class="view" data-view="seances">
+      <div class="head"><h1>Séances</h1><button class="btn" type="button" id="se-add-open">+ Noter une séance</button></div>
+      <form class="card form" id="se-form" hidden>
+        <div class="row"><label>Matière<select id="se-mat"></select></label><label>Mode<select id="se-mode"><option value="oral">Oral</option><option value="ecrit">Écrit</option></select></label><label>Durée (min)<input id="se-duree" type="number" min="5" max="240" step="5" value="20"></label></div>
+        <label>Bilan (ce que tu as retenu)<textarea id="se-bilan" rows="3" maxlength="1200"></textarea></label>
+        <label>Prochaine étape<input id="se-suite" maxlength="200"></label>
+        <div class="row end"><button class="btn ghost" type="button" id="se-cancel">Annuler</button><button class="btn primary" type="submit">Enregistrer</button></div>
+      </form>
+      <div id="se-list"></div>
+    </section>
+
+    <section class="view" data-view="idees">
+      <div class="head"><h1>Idées et tickets</h1></div>
+      <p class="hint">Une idée, un bug, une envie pour l'Académie : Margaux et Hugo la reprennent.</p>
+      <form class="card form" id="id-form"><label class="sr" for="id-text">Ton idée</label><textarea id="id-text" rows="2" maxlength="600" placeholder="Par exemple : « je veux réviser le darija en marchant »"></textarea><div class="row end"><button class="btn primary" type="submit">Envoyer</button></div></form>
+      <div id="id-list"></div>
+    </section>
+
+    <section class="view" data-view="reglages">
+      <div class="head"><h1>Réglages</h1></div>
+      <div class="card">
+        <p>L'Académie utilise le même dépôt de données privé et le même jeton que le Cockpit sur cet appareil.</p>
+        <p class="st-line"><span class="dot wait" id="set-dot"></span><span id="set-status">…</span></p>
+        <p class="hint" id="set-repo"></p>
+        <div class="row"><button class="btn primary" type="button" id="set-import">Reprendre les réglages du Cockpit</button><button class="btn" type="button" id="set-sync">Synchroniser</button></div>
+        <p class="hint" id="set-msg" role="status"></p>
+        <p class="hint">Pas encore de Cockpit réglé sur cet appareil ? Ouvre le <a href="../#reglages">Cockpit</a>, règle le dépôt et le jeton, puis reviens ici.</p>
+      </div>
+      <p class="hint ver" id="ver"></p>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script>self.STORE_CONFIG = { dbName: "academie-app", docs: ["academie"], readonly: [], importFrom: "cockpit-app", empty: { academie: { matieres: [], devoirs: [], seances: [], idees: [] } } };</script>
+<script src="../merge.js"></script>
+<script src="../store.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

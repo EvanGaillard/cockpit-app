@@ -1,0 +1,66 @@
+{
+ "devoirs": [
+  {
+   "created": "2026-11-20T10:00:00Z",
+   "docs": "Fascicule de TP (exemple)",
+   "due": "2026-11-30",
+   "id": "dv000001",
+   "maj": "2026-11-20T10:00:00Z",
+   "manque": "La valeur mesurée de l'étape 2 (exemple)",
+   "matiere": "iut",
+   "prof": "Victor",
+   "rendu": "Apprendre/Exemple de rendu.md",
+   "source": "mail",
+   "statut": "premier_rendu",
+   "titre": "Compte rendu de TP (exemple)"
+  },
+  {
+   "created": "2026-11-20T10:00:00Z",
+   "docs": "",
+   "due": "2026-12-17",
+   "id": "dv000002",
+   "maj": "2026-11-20T10:00:00Z",
+   "matiere": "anglais",
+   "prof": "Ingrid",
+   "source": "moodle",
+   "statut": "attribue",
+   "titre": "Exposé (exemple)"
+  },
+  {
+   "created": "2026-11-10T10:00:00Z",
+   "due": "2026-11-22",
+   "id": "dv000003",
+   "maj": "2026-11-12T10:00:00Z",
+   "matiere": "philo",
+   "prof": "Nour",
+   "source": "app",
+   "statut": "rendu",
+   "titre": "Devoir rendu (exemple)"
+  }
+ ],
+ "idees": [
+  {
+   "created": "2026-11-20T10:00:00Z",
+   "id": "id000001",
+   "maj": "2026-11-21T10:00:00Z",
+   "reponse": "Prévu au lot 7",
+   "statut": "pris",
+   "texte": "Idée d'exemple"
+  }
+ ],
+ "maj": "2026-11-20T10:00:00Z",
+ "matieres": [],
+ "seances": [
+  {
+   "bilan": "Séance d'exemple.",
+   "date": "2026-11-25T18:00:00Z",
+   "duree": 20,
+   "id": "se000001",
+   "maj": "2026-11-25T18:20:00Z",
+   "matiere": "philo",
+   "mode": "oral",
+   "prof": "Nour",
+   "suite": "Lire 10 pages (exemple)"
+  }
+ ]
+}
