@@ -1,0 +1,80 @@
+{
+ "items": [
+  {
+   "created": "2026-01-02",
+   "done": false,
+   "doneAt": null,
+   "due": null,
+   "goal": "gdemo001",
+   "id": "tdemo001",
+   "prio": "haute",
+   "steps": [
+    {
+     "done": false,
+     "id": "sdemo001",
+     "title": "Plan"
+    }
+   ],
+   "title": "Préparer la démo",
+   "when": "today"
+  },
+  {
+   "created": "2026-01-02",
+   "done": false,
+   "doneAt": null,
+   "due": null,
+   "goal": null,
+   "id": "tdemo002",
+   "prio": "moyenne",
+   "tags": [
+    "lecture"
+   ],
+   "title": "Relire le guide fictif",
+   "when": "today"
+  },
+  {
+   "created": "2026-01-03",
+   "done": false,
+   "doneAt": null,
+   "due": null,
+   "goal": "gdemo002",
+   "id": "tdemo003",
+   "prio": "basse",
+   "title": "Ranger le bureau fictif",
+   "when": "anytime"
+  },
+  {
+   "created": "2026-01-03",
+   "done": false,
+   "doneAt": null,
+   "due": null,
+   "goal": null,
+   "id": "tdemo004",
+   "prio": "basse",
+   "title": "Idée à trier",
+   "when": "inbox"
+  },
+  {
+   "created": "2026-01-04",
+   "done": false,
+   "doneAt": null,
+   "due": null,
+   "goal": null,
+   "id": "tdemo005",
+   "prio": "basse",
+   "title": "Projet un jour",
+   "when": "someday"
+  },
+  {
+   "created": "2026-01-01",
+   "done": true,
+   "doneAt": "2026-01-04",
+   "due": null,
+   "goal": "gdemo001",
+   "id": "tdemo006",
+   "prio": "moyenne",
+   "title": "Tâche terminée",
+   "when": "anytime"
+  }
+ ]
+}

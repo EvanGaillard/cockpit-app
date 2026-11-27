@@ -78,7 +78,7 @@
     const cls = "dot " + (SYNC_CLS[st.level] || "");
     ["sync-dot", "sync-dot2"].forEach((id) => ($(id).className = cls));
     $("sync-t").textContent = st.text; $("sync-t2").textContent = st.text;
-    $("setup-banner").hidden = Store.getSettings().hasToken;
+    { const g = Store.getSettings(); $("setup-banner").hidden = g.hasToken && g.configured; }
     if (view === "reglages") renderSettings();
   }
   // un changement venu du dépôt redessine l'écran : on garde ce qui est en train d'être tapé
@@ -988,7 +988,7 @@
   }
 
   // ---------- Réglages : jeton GitHub et état de la synchro ----------
-  const APP_VERSION = "1.0.0";
+  const APP_VERSION = "1.0.1";
   const fmtFull = (v) => { if (!v) return "jamais"; const d = new Date(v); return isNaN(d) ? v : d.toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); };
   function renderSettings() {
     const st = Store.status(), cfg = Store.getSettings();
@@ -999,7 +999,7 @@
       h("dt", { text: "Dernière synchro" }), h("dd", { text: fmtFull(st.lastSync) }),
       h("dt", { text: "En attente" }), h("dd", { text: st.pending ? st.pending + " document" + (st.pending > 1 ? "s" : "") + " à envoyer" : "rien" }),
       h("dt", { text: "Réseau" }), h("dd", { text: navigator.onLine ? "en ligne" : "hors ligne" }),
-      h("dt", { text: "Dépôt" }), h("dd", { text: cfg.owner + "/" + cfg.repo + " · " + cfg.branch + " · " + cfg.dir }));
+      h("dt", { text: "Dépôt" }), h("dd", { text: cfg.configured ? cfg.owner + "/" + cfg.repo + " · " + cfg.branch + " · " + cfg.dir : "à configurer" }));
     ["owner", "repo", "branch", "dir"].forEach((k) => { const el = $("set-" + k); if (document.activeElement !== el) el.value = cfg[k]; });
     $("set-token").placeholder = cfg.hasToken ? "•••••••• (jeton enregistré, laisse vide pour le garder)" : "github_pat_…";
     $("app-ver").textContent = "version " + APP_VERSION;
@@ -1009,13 +1009,16 @@
   $("set-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const s = formSettings(); if (!s.token && !Store.getSettings().hasToken) { showRes(false, "Colle d'abord ton jeton."); $("set-token").focus(); return; }
-    showRes(true, "Enregistré. Synchronisation…"); $("set-token").value = "";
-    await Store.saveSettings(s); const st = Store.status();
+    if (!String(s.owner || "").trim() || !String(s.repo || "").trim()) { showRes(false, "Indique le propriétaire et le nom de ton dépôt de données privé."); return; }
+    showRes(true, "Enregistré. Synchronisation…");
+    const r = await Store.saveSettings(s);
+    if (r && r.ok === false) { showRes(false, r.text); return; }
+    $("set-token").value = ""; const st = Store.status();
     showRes(st.level === "ok", st.level === "ok" ? "Enregistré. Données à jour." : st.text);
   });
   $("set-test").addEventListener("click", async () => { showRes(true, "Test en cours…"); const r = await Store.testToken(formSettings()); showRes(r.ok, r.text); });
   $("set-sync").addEventListener("click", () => { Store.sync().then(() => toast(Store.status().text)); });
-  $("set-forget").addEventListener("click", (e) => armConfirm(e.currentTarget, async () => { await Store.forgetDevice(); $("set-res").replaceChildren(); toast("Jeton et copie locale effacés."); render(); }));
+  $("set-forget").addEventListener("click", (e) => armConfirm(e.currentTarget, async () => { const r = await Store.forgetDevice(); if (r && r.ok === false) { showRes(false, r.text); return; } $("set-res").replaceChildren(); toast("Jeton et copie locale effacés (copie archivée sur l'appareil)."); render(); }));
 
   // ---------- boot ----------
   renderKinds();

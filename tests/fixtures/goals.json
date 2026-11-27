@@ -1,0 +1,50 @@
+{
+ "items": [
+  {
+   "area": "Projets perso et IA",
+   "id": "gdemo001",
+   "list": [
+    {
+     "done": false,
+     "id": "lgA1",
+     "kind": "achat",
+     "note": "exemple",
+     "title": "Objet fictif"
+    }
+   ],
+   "progress": 50,
+   "steps": [
+    {
+     "done": true,
+     "doneAt": "2026-01-02",
+     "envie": 4,
+     "id": "sgA1",
+     "title": "Étape 1"
+    },
+    {
+     "done": false,
+     "envie": 3,
+     "id": "sgA2",
+     "section": "Phase 2",
+     "title": "Étape 2"
+    }
+   ],
+   "title": "Projet démo A"
+  },
+  {
+   "area": "Santé et sport",
+   "id": "gdemo002",
+   "list": [],
+   "progress": 0,
+   "steps": [
+    {
+     "done": false,
+     "envie": 5,
+     "id": "sgB1",
+     "title": "Commencer"
+    }
+   ],
+   "title": "Projet démo B"
+  }
+ ]
+}

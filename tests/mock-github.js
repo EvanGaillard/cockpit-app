@@ -1,14 +1,18 @@
 // Faux GitHub pour les tests : l'API Contents en mémoire, branchée sur Playwright (context.route).
-// Il part d'une COPIE des fichiers Systeme/Cockpit/data/*.json (les vrais fichiers ne sont jamais modifiés).
+// Il part d'une COPIE de données FICTIVES (tests/fixtures/*.json) : aucune donnée personnelle dans ce dépôt public.
+// Plusieurs instances (un dépôt chacune) permettent de tester le changement de dépôt.
 "use strict";
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
-const OWNER = "EvanGaillard", REPO = "Claude-2nd-Brain", DIR = "Systeme/Cockpit/data", TOKEN = "test-token";
+const TOKEN = "test-token";
+const DEFAULT_REPO = { owner: "demo-owner", repo: "leon-data-demo", dir: "data" };
 
 class MockGitHub {
-  constructor(dataDir) {
+  constructor(dataDir, opts) {
+    const o = Object.assign({}, DEFAULT_REPO, opts || {});
+    this.owner = o.owner; this.repo = o.repo; this.dir = o.dir;
     this.files = new Map(); // nom -> { text, sha, date }
     this.commits = [];      // { message, path, date }
     this.requests = [];     // { method, path, status }
@@ -20,12 +24,13 @@ class MockGitHub {
   put(name, text, message) {
     const date = new Date().toISOString();
     this.files.set(name, { text, sha: this.sha(text + name), date });
-    if (message) this.commits.push({ message, path: DIR + "/" + name, date });
+    if (message) this.commits.push({ message, path: this.dir + "/" + name, date });
   }
   json(name) { return JSON.parse(this.files.get(name).text); }
   // écriture « extérieure » (routine de Léon, autre appareil)
   external(name, mutate) { const d = this.json(name); mutate(d); this.put(name, JSON.stringify(d, null, 1), "leon : " + name); }
 
+  matches(route) { return decodeURIComponent(new URL(route.request().url()).pathname).startsWith("/repos/" + this.owner + "/" + this.repo); }
   async handle(route) {
     const req = route.request(), url = new URL(req.url()), method = req.method();
     const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type, accept, x-github-api-version", "access-control-allow-methods": "GET, PUT, OPTIONS", "access-control-expose-headers": "x-ratelimit-remaining" };
@@ -34,14 +39,14 @@ class MockGitHub {
     if (this.failNext > 0) { this.failNext--; return reply(502, { message: "Bad gateway" }); }
     if ((req.headers()["authorization"] || "") !== "Bearer " + TOKEN) return reply(401, { message: "Bad credentials" });
     const p = decodeURIComponent(url.pathname);
-    const repoP = "/repos/" + OWNER + "/" + REPO;
-    if (p === repoP && method === "GET") return reply(200, { full_name: OWNER + "/" + REPO, private: true, permissions: { pull: true, push: true } });
+    const repoP = "/repos/" + this.owner + "/" + this.repo;
+    if (p === repoP && method === "GET") return reply(200, { full_name: this.owner + "/" + this.repo, private: true, permissions: { pull: true, push: true } });
     if (p === repoP + "/commits" && method === "GET") {
       const wanted = url.searchParams.get("path"); const c = this.commits.filter((x) => x.path === wanted).slice(-1);
       return reply(200, c.map((x) => ({ sha: "c", commit: { message: x.message, committer: { date: x.date } } })));
     }
-    if (p === repoP + "/contents/" + DIR && method === "GET") return reply(200, [...this.files].map(([name, f]) => ({ name, path: DIR + "/" + name, sha: f.sha, type: "file" })));
-    const m = p.startsWith(repoP + "/contents/" + DIR + "/") ? p.slice((repoP + "/contents/" + DIR + "/").length) : null;
+    if (p === repoP + "/contents/" + this.dir && method === "GET") return reply(200, [...this.files].map(([name, f]) => ({ name, path: this.dir + "/" + name, sha: f.sha, type: "file" })));
+    const m = p.startsWith(repoP + "/contents/" + this.dir + "/") ? p.slice((repoP + "/contents/" + this.dir + "/").length) : null;
     if (m && method === "GET") {
       const f = this.files.get(m); if (!f) return reply(404, { message: "Not Found" });
       return reply(200, { name: m, sha: f.sha, encoding: "base64", content: Buffer.from(f.text, "utf8").toString("base64").replace(/(.{60})/g, "$1\n") });
@@ -59,4 +64,4 @@ class MockGitHub {
     return reply(404, { message: "Not Found (mock) " + method + " " + p });
   }
 }
-module.exports = { MockGitHub, TOKEN };
+module.exports = { MockGitHub, TOKEN, DEFAULT_REPO };

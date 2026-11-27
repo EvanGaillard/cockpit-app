@@ -41,7 +41,7 @@
   <main>
     <!-- AUJOURD'HUI -->
     <section class="view" id="v-aujourdhui" aria-label="Aujourd'hui">
-      <div class="banner" id="setup-banner" hidden><span><strong>Bienvenue.</strong> Pour charger tes données, colle ton jeton GitHub dans les réglages. Tout ce que tu ajoutes avant reste sur cet appareil et sera envoyé ensuite.</span><a class="btn primary sm" href="#reglages" style="text-decoration:none">Ouvrir les réglages</a></div>
+      <div class="banner" id="setup-banner" hidden><span><strong>Bienvenue.</strong> Pour charger tes données, indique ton dépôt de données privé et colle ton jeton GitHub dans les réglages. Tout ce que tu ajoutes avant reste sur cet appareil et sera envoyé ensuite.</span><a class="btn primary sm" href="#reglages" style="text-decoration:none">Ouvrir les réglages</a></div>
       <div class="bento">
         <section class="tile s4 obj" id="obj" hidden aria-label="Objectif du jour"></section>
         <section class="tile s4 ritual" id="ritual" hidden aria-label="Rituel du jour"></section>
@@ -157,7 +157,7 @@
         <div class="form">
           <label class="sr" for="eq-due">Pour quand (optionnel)</label><input type="date" class="field" id="eq-due" title="Pour quand (optionnel)">
           <button class="btn light sm" type="button" id="eq-send">Envoyer à Léon</button>
-          <a class="btn outline sm" style="text-decoration:none" href="https://claude.ai/code/session_01Lu3W2sovapt3TaBs8cNgh7" target="_blank" rel="noopener">Ouvrir le bureau de Léon ↗</a>
+          <span class="hint">Pour parler à Léon : ouvre ton bureau dans l'app Claude.</span>
         </div>
         <span class="hint" style="color:#B8BCC6">Ici : une demande courte, traitée vers 7 h, 13 h et 20 h. Pour discuter, joindre un document ou suivre un travail en direct : le bureau de Léon.</span>
       </section>
@@ -176,7 +176,7 @@
 
     <!-- RÉGLAGES -->
     <section class="view" id="v-reglages" aria-label="Réglages" hidden>
-      <div class="wkhead"><div><span class="eyebrow" id="set-meta">Synchronisation avec le coffre</span><h1>Réglages</h1></div></div>
+      <div class="wkhead"><div><span class="eyebrow" id="set-meta">Synchronisation avec ton dépôt de données</span><h1>Réglages</h1></div></div>
       <div class="bento">
         <section class="tile s2" aria-labelledby="h-sync">
           <div class="th"><h2 id="h-sync">Synchronisation</h2><span class="mono" id="set-st"></span></div>
@@ -186,10 +186,10 @@
         <section class="tile s2 lilac" aria-labelledby="h-tok">
           <div class="th"><h2 id="h-tok">Jeton GitHub</h2><span class="mono" id="tok-st"></span></div>
           <form id="set-form" class="setgrid" autocomplete="off">
-            <label class="full">Jeton (« fine-grained », limité au dépôt du coffre)
+            <label class="full">Jeton (« fine-grained », limité à ton dépôt de données privé)
               <input class="field" type="password" id="set-token" placeholder="github_pat_…" autocomplete="off" autocapitalize="off" spellcheck="false">
             </label>
-            <details class="adv full"><summary>Dépôt et dossier (déjà remplis)</summary>
+            <details class="adv full" id="set-adv" open><summary>Dépôt de données privé (propriétaire, nom, dossier « data »)</summary>
               <div class="setgrid" style="margin-top:8px">
                 <label>Propriétaire<input class="field" id="set-owner" autocapitalize="off" spellcheck="false"></label>
                 <label>Dépôt<input class="field" id="set-repo" autocapitalize="off" spellcheck="false"></label>
@@ -200,7 +200,7 @@
             <div class="btns full" style="margin-top:0"><button class="btn primary sm" type="submit">Enregistrer</button><button class="btn sm" type="button" id="set-test">Tester le jeton</button></div>
             <div class="full" id="set-res" role="status"></div>
           </form>
-          <span class="hint">Le jeton reste seulement sur cet appareil. Il n'est jamais écrit dans le coffre. Laisse le champ vide pour garder le jeton actuel.</span>
+          <span class="hint">Le jeton reste seulement sur cet appareil. Il n'est jamais écrit dans un dépôt. Laisse le champ vide pour garder le jeton actuel.</span>
         </section>
         <section class="tile s2 peach" aria-labelledby="h-lim">
           <div class="th"><h2 id="h-lim">Ce que l'app ne fait pas (v1)</h2></div>

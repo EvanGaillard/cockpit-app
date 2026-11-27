@@ -7,10 +7,10 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { chromium } = require("playwright");
-const { MockGitHub, TOKEN } = require("./mock-github");
+const { MockGitHub, TOKEN, DEFAULT_REPO } = require("./mock-github");
 
 const APP = path.join(__dirname, "..");
-const DATA = path.join(APP, "..", "data");
+const DATA = path.join(__dirname, "fixtures"); // données FICTIVES uniquement
 const SHOTS = process.argv[2] || fs.mkdtempSync(path.join(os.tmpdir(), "cockpit-app-"));
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".webmanifest": "application/manifest+json", ".png": "image/png", ".woff2": "font/woff2", ".json": "application/json" };
 
@@ -42,15 +42,20 @@ const VIEWS = ["aujourdhui", "taches", "projets", "notes", "semaine", "equipe", 
 
   async function setup(ctxOpts, mock, sw) {
     const ctx = await browser.newContext(Object.assign({ deviceScaleFactor: 1, serviceWorkers: sw ? "allow" : "block", locale: "fr-FR", timezoneId: "Europe/Paris" }, ctxOpts));
-    await ctx.route("https://api.github.com/**", (route) => mock.handle(route));
+    const mocks = Array.isArray(mock) ? mock : [mock];
+    await ctx.route("https://api.github.com/**", (route) => (mocks.find((m) => m.matches(route)) || mocks[0]).handle(route));
     const page = await ctx.newPage();
     page.setDefaultTimeout(8000);
     page.on("pageerror", (e) => errors.push(e.message));
     page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource|ERR_INTERNET_DISCONNECTED|net::/.test(m.text())) errors.push("console : " + m.text()); });
     return { ctx, page };
   }
-  async function connectToken(page) {
+  async function fillRepo(page, r) {
+    await page.fill("#set-owner", r.owner); await page.fill("#set-repo", r.repo); await page.fill("#set-dir", r.dir);
+  }
+  async function connectToken(page, r) {
     await page.goto(BASE + "#reglages");
+    await fillRepo(page, r || DEFAULT_REPO);
     await page.fill("#set-token", TOKEN);
     await page.click("#set-form button[type=submit]");
     return until(async () => (await page.textContent("#sync-t")) === "À jour", 10000, "synchro initiale");
@@ -181,6 +186,65 @@ const VIEWS = ["aujourdhui", "taches", "projets", "notes", "semaine", "equipe", 
     const today = await page.evaluate(() => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); });
     const id2 = mock.json("habits.json").items[1].id;
     check("après le retour du réseau (page sous service worker) : envoyé", await until(() => ((mock.json("habits.json").log || {})[today] || []).includes(id2), 10000, "resynchro sw"));
+    await ctx.close();
+  }
+
+
+  // ---------- 4. Changement de dépôt (migration vers le dépôt de données) ----------
+  {
+    const A = { owner: "demo-owner", repo: "ancien-depot", dir: "Systeme/Cockpit/data" };
+    const B = { owner: "demo-owner", repo: "leon-data-demo", dir: "data" };
+    const mockA = new MockGitHub(DATA, A), mockB = new MockGitHub(DATA, B);
+    mockB.external("habits.json", (d) => d.items.push({ id: "hdemoB01", name: "Habitude du nouveau dépôt" }));
+    mockB.commits.length = 0;
+    const { ctx, page } = await setup({ viewport: { width: 1280, height: 800 } }, [mockA, mockB]);
+    await page.goto(BASE);
+    check("changement de dépôt : connexion à l'ancien dépôt", await connectToken(page, A));
+    // écriture non envoyée (hors ligne) → le changement doit être refusé, rien n'est vidé
+    await ctx.setOffline(true);
+    await page.goto(BASE + "#aujourdhui");
+    await page.click(".qa-open"); await page.fill("#qa-title", "Saisie non envoyée"); await page.click("#qa-form button[type=submit]");
+    await page.waitForTimeout(300);
+    await page.goto(BASE + "#reglages");
+    await fillRepo(page, B); await page.click("#set-form button[type=submit]");
+    await page.waitForTimeout(300);
+    const res = await page.textContent("#set-res");
+    const st = await page.evaluate(() => CockpitStore.getSettings());
+    check("changement refusé tant qu'une saisie n'est pas envoyée", /refusé/.test(res) && st.repo === A.repo, res);
+    check("la saisie non envoyée est toujours sur l'appareil", await page.evaluate(() => CockpitStore.get("tasks").items.some((t) => t.title === "Saisie non envoyée")));
+    const forget = await page.evaluate(() => CockpitStore.forgetDevice());
+    check("« Oublier cet appareil » refusé tant qu'une saisie n'est pas envoyée", forget.ok === false && await page.evaluate(() => CockpitStore.get("tasks").items.some((t) => t.title === "Saisie non envoyée")));
+    check("aucune requête vers le nouveau dépôt pendant le refus", !mockB.requests.length);
+    await ctx.setOffline(false);
+    check("retour du réseau : la saisie part vers l'ANCIEN dépôt", await until(() => mockA.json("tasks.json").items.some((t) => t.title === "Saisie non envoyée"), 8000));
+    await until(async () => (await page.textContent("#sync-t")) === "À jour", 5000);
+    // changement propre
+    await page.goto(BASE + "#reglages");
+    await fillRepo(page, B); await page.click("#set-form button[type=submit]");
+    check("changement accepté une fois « À jour »", await until(async () => (await page.textContent("#sync-t")) === "À jour" && (await page.evaluate(() => CockpitStore.getSettings().repo)) === B.repo, 8000));
+    const nB = mockB.json("habits.json").items.length;
+    await page.goto(BASE + "#aujourdhui");
+    check("données du nouveau dépôt affichées", await until(async () => (await page.locator("#hab-today .hab").count()) === nB, 5000), nB + " habitudes");
+    check("aucune donnée de l'ancien dépôt poussée vers le nouveau (aucun commit)", mockB.commits.length === 0 && !mockB.json("tasks.json").items.some((t) => t.title === "Saisie non envoyée"));
+    check("copie locale de l'ancien dépôt archivée sur l'appareil", (await page.evaluate(() => CockpitStore.archives())).some((k) => k.includes(A.repo)));
+    // écriture normale dans le nouveau dépôt
+    await page.click(".qa-open"); await page.fill("#qa-title", "Première tâche du nouveau dépôt"); await page.click("#qa-form button[type=submit]");
+    check("écriture dans le nouveau dépôt", await until(() => mockB.json("tasks.json").items.some((t) => t.title === "Première tâche du nouveau dépôt") && mockB.commits.some((c) => c.message === "app : tasks"), 8000));
+    // migration « v1 » : oublier l'appareil (à jour) puis se reconnecter → rien de local n'est poussé
+    const mockC = new MockGitHub(DATA, { owner: "demo-owner", repo: "autre-depot", dir: "data" });
+    const f2 = await page.evaluate(() => CockpitStore.forgetDevice());
+    check("« Oublier cet appareil » accepté quand tout est envoyé", f2.ok === true);
+    await ctx.unroute("https://api.github.com/**");
+    await ctx.route("https://api.github.com/**", (route) => ([mockA, mockB, mockC].find((m) => m.matches(route)) || mockC).handle(route));
+    check("reconnexion après oubli : synchro", await connectToken(page, { owner: "demo-owner", repo: "autre-depot", dir: "data" }));
+    check("reconnexion après oubli : aucun commit (rien de local poussé)", mockC.commits.length === 0);
+    await ctx.close();
+  }
+  {
+    const { ctx, page } = await setup({ viewport: { width: 390, height: 844 } }, new MockGitHub(DATA));
+    await page.goto(BASE + "#reglages");
+    check("premier lancement : propriétaire et dépôt vides, dossier « data »", (await page.inputValue("#set-owner")) === "" && (await page.inputValue("#set-repo")) === "" && (await page.inputValue("#set-dir")) === "data");
+    check("premier lancement : état « Dépôt à configurer »", /Dépôt à configurer/.test(await page.textContent("#sync-t")));
     await ctx.close();
   }
 

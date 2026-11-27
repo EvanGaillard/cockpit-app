@@ -1,0 +1,52 @@
+{
+ "budget": {
+  "note": "Budget fictif."
+ },
+ "comite": {
+  "date": "2026-01-04",
+  "texte": "Comité fictif."
+ },
+ "maj": "2026-01-03T10:30:00.000Z",
+ "tickets": [
+  {
+   "controle": false,
+   "created": "2026-01-02T10:00:00.000Z",
+   "demande": "Demande fictive 1",
+   "due": null,
+   "grade": "charge",
+   "id": "kdemo001",
+   "journal": [
+    {
+     "at": "2026-01-02T10:00:00.000Z",
+     "qui": "Léon",
+     "txt": "Confié à Hugo"
+    }
+   ],
+   "maj": "2026-01-02T11:00:00.000Z",
+   "n": 1,
+   "question": "",
+   "rapport": "Fait (fictif).",
+   "reponse": "",
+   "service": "hugo",
+   "source": "app",
+   "statut": "fait"
+  },
+  {
+   "controle": false,
+   "created": "2026-01-03T10:00:00.000Z",
+   "demande": "Demande fictive 2",
+   "due": null,
+   "grade": "manager",
+   "id": "kdemo002",
+   "journal": [],
+   "maj": "2026-01-03T10:30:00.000Z",
+   "n": 2,
+   "question": "Question fictive ?",
+   "rapport": "",
+   "reponse": "",
+   "service": "leon",
+   "source": "bureau",
+   "statut": "attente"
+  }
+ ]
+}
