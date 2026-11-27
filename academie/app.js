@@ -17,7 +17,10 @@
  * L'IA n'est pas dans l'app : les profs travaillent dans le bureau de Margaux et écrivent ce document avec ldata. */
 (function () {
   "use strict";
-  const APP_VERSION = "0.5.0";
+  const APP_VERSION = "0.6.0";
+  // Deux applis, un seul code : l'Académie (apprentissages perso) et l'IUT (école et alternance, sobre).
+  // L'IUT charge ce fichier avec self.ACAD_MODE = "iut". Les données ne bougent pas : devoirs dans « academie », EDT et contacts dans « iut ».
+  const IUT = self.ACAD_MODE === "iut";
   const S = self.CockpitStore;
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
@@ -63,10 +66,17 @@
     { id: "julien", nom: "Julien", matiere: "musique", accroche: "Musique : de PNL à Beethoven, guitare et piano." },
     { id: "samuel", nom: "Samuel", role: "Mentor", accroche: "Il t'aide à trouver le bon rythme. Il complète un vrai suivi, sans le remplacer." },
   ];
+  const IUT_IDS = ["margaux", "victor"];
+  PERSONNES.splice(0, PERSONNES.length, ...PERSONNES.filter((pp) => (IUT ? IUT_IDS.includes(pp.id) : pp.id !== "victor")));
   const personne = (id) => PERSONNES.find((x) => x.id === id) || null;
-  const roleDe = (pp) => (pp.matiere ? mat(pp.matiere).nom.split(" · ")[0] : pp.role);
+  const roleDe = (pp) => (pp.matiere ? mat(pp.matiere).nom.split(" · ")[0] : IUT && pp.id === "margaux" ? "Référente IUT et entreprise" : pp.role);
   const couleurDe = (pp) => (pp.matiere ? col(mat(pp.matiere).couleur) : pp.id === "samuel" ? "#B9D3E6" : "#CFE5D6");
-  const msgs = (pid) => (Array.isArray(A.messages) ? A.messages : []).filter((m) => m && m.prof === pid).sort((a, b) => (a.at || "").localeCompare(b.at || ""));
+  // Pro et perso séparés : séances par matière ; idées et messages créés dans l'appli IUT portent app: "iut" (une réponse suit son message).
+  const estIut = (x) => !!x && x.app === "iut";
+  const pourMoi = (x) => (IUT ? estIut(x) : !estIut(x));
+  const seancesIci = () => (A.seances || []).filter((x) => x && (IUT ? x.matiere === "iut" : x.matiere !== "iut"));
+  function msgIci(m, all) { if (m.reponseA) { const o = all.find((y) => y.id === m.reponseA); if (o) return pourMoi(o); } return pourMoi(m); }
+  const msgs = (pid) => { const all = Array.isArray(A.messages) ? A.messages : []; return all.filter((m) => m && m.prof === pid && (pid !== "margaux" || msgIci(m, all))).sort((a, b) => (a.at || "").localeCompare(b.at || "")); };
   // « vu » : confort propre à l'appareil (navigateur), jamais dans le dépôt
   const vuGet = (pid) => { try { return localStorage.getItem("acad-vu:" + pid) || ""; } catch (e) { return ""; } };
   const vuSet = (pid, iso) => { try { localStorage.setItem("acad-vu:" + pid, iso); } catch (e) { /* sans stockage, pas de pastille */ } };
@@ -105,14 +115,14 @@
   const safeUrl = (u) => (/^https:\/\//.test(u || "") ? u : null);
 
   function mats() {
-    const byId = {}; BASE_MATS.forEach((m) => (byId[m.id] = Object.assign({}, m)));
-    (A.matieres || []).forEach((m) => { if (m && m.id) byId[m.id] = Object.assign({}, byId[m.id] || {}, m); });
+    const byId = {}; BASE_MATS.filter((m) => (IUT ? m.id === "iut" : m.id !== "iut")).forEach((m) => (byId[m.id] = Object.assign({}, m)));
+    (A.matieres || []).forEach((m) => { if (m && m.id && (IUT ? m.id === "iut" : m.id !== "iut")) byId[m.id] = Object.assign({}, byId[m.id] || {}, m); });
     return Object.values(byId).sort((a, b) => (a.ordre || 99) - (b.ordre || 99));
   }
   // Équipe active (décision d'Evan du 27/11, soir) : tous les profs ; le sport attend son appli. Un document peut désactiver une matière (actif: false).
   const actif = (m) => (m.actif === undefined ? m.id !== "sport" : m.actif === true);
   const profDe = (m) => (actif(m) ? m.prof : "Margaux"); // prof pas encore arrivé : Margaux s'en charge
-  const mat = (id) => mats().find((m) => m.id === id) || { id, nom: id || "Sans matière", prof: "Margaux", couleur: "#CBD2D9" };
+  const mat = (id) => mats().find((m) => m.id === id) || Object.assign({ id, nom: id || "Sans matière", prof: "Margaux", couleur: "#CBD2D9" }, BASE_MATS.find((m) => m.id === id) || {});
 
   function save(mut) {
     const d = S.get("academie") || {}; ["matieres", "devoirs", "seances", "idees", "messages"].forEach((k) => { if (!Array.isArray(d[k])) d[k] = []; });
@@ -124,6 +134,7 @@
   function lastSeance(mid) { return (A.seances || []).filter((s) => s.matiere === mid).map((s) => s.date).sort().pop() || null; }
   function recommend() {
     const t = today();
+    if (!IUT) return recommendPerso(t);
     const dated = (A.devoirs || []).filter(OPEN).map((d) => ({ d, e: prochaine(d) })).filter((x) => x.e && x.e.statut === "confirmee").sort((a, b) => a.e.date.localeCompare(b.e.date));
     const hit = dated.find((x) => days(t, x.e.date) <= 7), urgent = hit && hit.d;
     if (urgent) {
@@ -132,8 +143,11 @@
     }
     const flou = (A.devoirs || []).filter(OPEN).find(aVerifier);
     if (flou) return { kind: "verifier", matiere: flou.matiere, titre: "Date à vérifier : " + flou.titre, raison: "On ne connaît pas encore ta date de rendu. Margaux la cherche ; rien n'est mis dans ton agenda tant qu'elle n'est pas confirmée.", devoir: flou };
+    return null; // IUT : rien d'urgent
+  }
+  function recommendPerso(t) {
     const p = A.prochaine;
-    if (p && p.matiere && p.date && days(p.date, t) <= 2) return { kind: "margaux", matiere: p.matiere, titre: "Séance proposée par Margaux", raison: p.raison || "" };
+    if (p && p.matiere && p.matiere !== "iut" && p.date && days(p.date, t) <= 2) return { kind: "margaux", matiere: p.matiere, titre: "Séance proposée par Margaux", raison: p.raison || "" };
     // matière délaissée : la plus longtemps sans séance, la philo d'abord à égalité (priorité n°1)
     const list = mats().filter((m) => m.id !== "sport" && actif(m)).map((m) => ({ m, last: lastSeance(m.id) }));
     list.sort((a, b) => (a.last || "0000") .localeCompare(b.last || "0000") || (a.m.ordre - b.m.ordre));
@@ -214,17 +228,20 @@
   // ---------- rendu ----------
   function render() {
     $$(".tabs a").forEach((a) => a.classList.toggle("on", a.dataset.v === (view === "devoir" ? "devoirs" : view === "prof" ? "profs" : view)));
-    const nl = PERSONNES.reduce((n, pp) => n + nonLus(pp.id), 0), pb = $("#pf-badge"); pb.hidden = !nl; pb.textContent = nl;
+    const nl = PERSONNES.reduce((n, pp) => n + nonLus(pp.id), 0), pb = $("#pf-badge"); if (pb) { pb.hidden = !nl; pb.textContent = nl; }
     $$(".view").forEach((v) => (v.hidden = v.dataset.view !== view));
     const open = (A.devoirs || []).filter(OPEN);
-    const b = $("#dv-badge"); b.hidden = !open.length; b.textContent = open.length;
-    ({ accueil: rAccueil, devoirs: rDevoirs, devoir: rDevoir, profs: rProfs, prof: rProf, matieres: rMatieres, seances: rSeances, idees: rIdees, reglages: rReglages })[view]();
+    const b = $("#dv-badge"); if (b) { b.hidden = !open.length; b.textContent = open.length; }
+    ({ accueil: rAccueil, devoirs: rDevoirs, devoir: rDevoir, profs: rProfs, prof: rProf, matieres: rMatieres, seances: rSeances, idees: rIdees, reglages: rReglages, edt: rEdt, contacts: rContacts })[view]();
   }
 
   function rAccueil() {
     const h = new Date().getHours();
-    $("#greet").textContent = (h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir") + " Evan · Margaux et l'équipe";
-    const r = recommend(), m = mat(r.matiere);
+    $("#greet").textContent = (h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir") + " Evan · " + (IUT ? "IUT et alternance" : "Margaux et l'équipe");
+    if (IUT) edtJourHtml();
+    const r = recommend();
+    if (!r) { $("#reco").innerHTML = '<div class="card"><h2>Rien d\'urgent à rendre</h2><p class="hint">Odile surveille tes mails et Moodle. Les devoirs à venir sont dans l\'onglet Devoirs.</p></div>'; nextDv(); return; }
+    const m = mat(r.matiere);
     $("#reco").innerHTML = '<div class="card reco" style="--c:' + esc(col(m.couleur)) + '">' +
       '<div class="reco-top"><span class="chip" style="background:' + esc(col(m.couleur)) + '">' + esc(m.nom.split(" · ")[0]) + '</span><span class="who">avec ' + esc(r.devoir && r.devoir.prof ? r.devoir.prof : profDe(m)) + '</span></div>' +
       '<h1>' + esc(r.titre) + '</h1><p class="why">' + esc(r.raison) + '</p>' +
@@ -239,8 +256,8 @@
     }));
     bindSamuel($("#reco"), r, rAccueil);
     $("#reco [data-done]").addEventListener("click", () => { go("seances"); openSeance(r.matiere); });
-    const nx = (A.devoirs || []).filter(OPEN).sort((a, b) => sortKey(a).localeCompare(sortKey(b))).slice(0, 4);
-    $("#next-dv").innerHTML = nx.length ? nx.map(dvLine).join("") : '<p class="empty">Rien à rendre pour l\'instant. Odile surveille tes mails et Moodle.</p>';
+    nextDv();
+    if (IUT || !$("#balance")) return;
     // équilibre : minutes par matière sur 14 jours
     const t = today(), mins = {};
     (A.seances || []).forEach((s) => { if (s.date && days(s.date.slice(0, 10), t) <= 14) mins[s.matiere] = (mins[s.matiere] || 0) + (Number(s.duree) || 0); });
@@ -250,6 +267,11 @@
     $("#mot").innerHTML = '<p class="quote">' + esc(mots[new Date().getDate() % mots.length]) + "</p>";
   }
 
+  function nextDv() {
+    const el = $("#next-dv"); if (!el) return;
+    const nx = (A.devoirs || []).filter(OPEN).sort((a, b) => sortKey(a).localeCompare(sortKey(b))).slice(0, 4);
+    el.innerHTML = nx.length ? nx.map(dvLine).join("") : '<p class="empty">Rien à rendre pour l\'instant. Odile surveille tes mails et Moodle.</p>';
+  }
   function dvLine(d) {
     const m = mat(d.matiere), e = prochaine(d), flou = e && e.statut === "a_verifier";
     return '<a class="dv" href="#devoir/' + esc(encodeURIComponent(d.id)) + '" style="--c:' + esc(col(m.couleur)) + '"><div><b>' + (d.code ? '<span class="code">' + esc(d.code) + "</span> " : "") + esc(d.titre) + '</b><span class="meta">' + esc(m.nom.split(" · ")[0]) + " · " + esc(d.prof || profDe(m)) + " · " + (flou ? '<span class="verif">date à vérifier</span>' : esc(echLabel(e))) + "</span>" + travailBadge(d) + "</div><span class=\"st st-" + esc(d.statut || "nouveau") + '">' + esc(STATUTS[d.statut] || "Repéré") + "</span></a>";
@@ -375,7 +397,7 @@
   function openSeance(mid) { const f = $("#se-form"); f.hidden = false; fillMatSelect($("#se-mat"), mid || "philo"); $("#se-bilan").focus(); }
 
   function rSeances() {
-    const list = (A.seances || []).slice().sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    const list = seancesIci().sort((a, b) => (b.date || "").localeCompare(a.date || ""));
     $("#se-list").innerHTML = list.length ? list.map((s) => { const m = mat(s.matiere); return '<div class="card se" style="--c:' + esc(col(m.couleur)) + '"><div class="se-top"><span class="chip" style="background:' + esc(col(m.couleur)) + '">' + esc(m.nom.split(" · ")[0]) + "</span><span class=\"meta\">" + esc(fdate(s.date)) + " · " + esc(s.prof || m.prof) + " · " + (s.mode === "oral" ? "oral" : "écrit") + (s.duree ? " · " + esc(s.duree) + " min" : "") + "</span></div>" + (s.bilan ? "<p>" + esc(s.bilan) + "</p>" : "") + (s.suite ? '<p class="hint"><b>Ensuite :</b> ' + esc(s.suite) + "</p>" : "") + (s.note ? '<p class="hint">Note : <code>' + esc(s.note) + "</code></p>" : "") + "</div>"; }).join("") : '<p class="empty">Pas encore de séance. La première, c\'est 20 minutes avec Nour ?</p>';
   }
 
@@ -407,7 +429,7 @@
     const th = $("#pf-thread"); th.scrollTop = th.scrollHeight;
     $("#pf-form").addEventListener("submit", (e) => {
       e.preventDefault(); const texte = $("#pf-text").value.trim(); if (!texte) return;
-      save((d) => d.messages.push({ id: uid(), prof: pp.id, de: "evan", texte, at: now(), statut: "envoye", maj: now() }));
+      save((d) => d.messages.push(Object.assign({ id: uid(), prof: pp.id, de: "evan", texte, at: now(), statut: "envoye", maj: now() }, IUT ? { app: "iut" } : {})));
       toast("Envoyé à " + pp.nom + " : réponse dans l'heure");
     });
     $$("#pf-thread [data-renvoi]").forEach((b) => b.addEventListener("click", () => save((d) => { const x = d.messages.find((y) => y.id === b.dataset.renvoi); if (x && x.statut === "erreur") { x.statut = "envoye"; x.maj = now(); } })));
@@ -420,7 +442,7 @@
   }
 
   function rIdees() {
-    const list = (A.idees || []).slice().sort((a, b) => (b.created || "").localeCompare(a.created || ""));
+    const list = (A.idees || []).filter(pourMoi).sort((a, b) => (b.created || "").localeCompare(a.created || ""));
     const ST = { nouveau: "Reçue", pris: "Prise en charge", fait: "Faite", refuse: "Écartée" };
     $("#id-list").innerHTML = list.length ? list.map((i) => '<div class="card idea"><p>' + esc(i.texte) + '</p><span class="meta">' + esc(fdate(i.created)) + " · " + esc(ST[i.statut] || "Reçue") + (i.reponse ? " · " + esc(i.reponse) : "") + "</span></div>").join("") : '<p class="empty">Aucune idée pour l\'instant.</p>';
   }
@@ -429,49 +451,216 @@
     const st = S.status(), s = S.getSettings();
     $("#set-dot").className = "dot " + st.level; $("#set-status").textContent = st.text;
     $("#set-repo").textContent = s.configured ? "Dépôt : " + s.owner + "/" + s.repo + " · branche " + s.branch + " · dossier " + s.dir + (s.hasToken ? " · jeton présent" : " · jeton manquant") : "Aucun dépôt réglé.";
-    $("#ver").textContent = "Académie " + APP_VERSION + " · lot 1 (socle)";
+    $("#ver").textContent = (IUT ? "IUT " : "Académie ") + APP_VERSION;
+    if (IUT) rReglagesIut();
+  }
+
+  // ---------- IUT : emploi du temps (lien .ics de l'IUT) ----------
+  let I = { edt: {}, contacts: [] }, edtErr = null, edtLu = null;
+  function saveIut(mut) { const d = S.get("iut") || {}; if (!d.edt) d.edt = {}; if (!Array.isArray(d.contacts)) d.contacts = []; mut(d); d.maj = now(); I = d; S.set("iut", d); render(); }
+  // ICS → [{id, debut "AAAA-MM-JJTHH:MM" (heure de Paris), fin, jour (toute la journée), titre, lieu, desc}]
+  function parisParts(dt) { const f = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(dt); const g = (t) => (f.find((x) => x.type === t) || {}).value; return g("year") + "-" + g("month") + "-" + g("day") + "T" + (g("hour") === "24" ? "00" : g("hour")) + ":" + g("minute"); }
+  function zoneVersUtc(y, mo, d, h, mi, tz) { // heure « murale » d'un fuseau IANA → instant UTC (deux passes suffisent)
+    try {
+      const off = (t) => { const f = new Intl.DateTimeFormat("en-US", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).formatToParts(new Date(t)); const g = (k) => +(f.find((x) => x.type === k) || {}).value; return Date.UTC(g("year"), g("month") - 1, g("day"), g("hour") % 24, g("minute"), g("second")) - t; };
+      const w = Date.UTC(y, mo - 1, d, h, mi); let t = w - off(w); t = w - off(t); return new Date(t);
+    } catch (e) { return null; }
+  }
+  function icsDate(v, params) {
+    const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?$/.exec(v || ""); if (!m) return null;
+    if (!m[4] || /(^|;)VALUE=DATE(;|$)/i.test(params || "")) return { iso: m[1] + "-" + m[2] + "-" + m[3] + "T00:00", jour: true };
+    if (m[7]) return { iso: parisParts(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)))) };
+    const tz = (/(?:^|;)TZID=("?)([^;:"]+)\1/i.exec(params || "") || [])[2];
+    if (tz && tz !== "Europe/Paris") { const u = zoneVersUtc(+m[1], +m[2], +m[3], +m[4], +m[5], tz); if (u) return { iso: parisParts(u) }; }
+    return { iso: m[1] + "-" + m[2] + "-" + m[3] + "T" + m[4] + ":" + m[5] }; // heure de Paris (ou fuseau inconnu) prise telle quelle
+  }
+  const icsText = (v) => String(v || "").replace(/\\n/gi, "\n").replace(/\\([,;\\])/g, "$1").trim();
+  function parseICS(text) {
+    const lines = String(text || "").replace(/\r\n/g, "\n").replace(/\n[ \t]/g, "").split("\n"); // dépliage des lignes
+    const out = []; let ev = null;
+    for (const l of lines) {
+      if (l === "BEGIN:VEVENT") { ev = {}; continue; }
+      if (l === "END:VEVENT") { if (ev && ev.debut) out.push(ev); ev = null; continue; }
+      if (!ev) continue;
+      const i = l.indexOf(":"); if (i < 0) continue;
+      const head = l.slice(0, i), val = l.slice(i + 1), name = head.split(";")[0].toUpperCase(), params = head.slice(name.length);
+      if (name === "UID") ev.id = val.trim();
+      else if (name === "DTSTART") { const d = icsDate(val.trim(), params); if (d) { ev.debut = d.iso; if (d.jour) ev.jour = true; } }
+      else if (name === "DTEND") { const d = icsDate(val.trim(), params); if (d) ev.fin = d.iso; }
+      else if (name === "SUMMARY") ev.titre = icsText(val);
+      else if (name === "LOCATION") ev.lieu = icsText(val);
+      else if (name === "DESCRIPTION") ev.desc = icsText(val).replace(/\(\s*Export(?:é|e)(?:e)?s?\s*le\s*:[^)]*\)/gi, "").replace(/\(\s*Exported\s*:[^)]*\)/gi, "").trim().slice(0, 300); // ADE ajoute la date d'export à chaque lecture
+      else if (name === "RECURRENCE-ID") ev.rec = val.trim();
+      else if (name === "STATUS" && /CANCELLED/i.test(val)) ev.annule = true;
+    }
+    const seen = new Set();
+    return out.map((e) => { const o = Object.assign({}, e); let id = (e.id || e.debut + "|" + (e.titre || "")) + (e.rec ? "|" + e.rec : ""); if (seen.has(id)) id += "|" + e.debut; seen.add(id); o.id = id; delete o.rec; return o; }).sort((a, b) => a.debut.localeCompare(b.debut));
+  }
+  function fenetre(evs) { const a = keyAdd(today(), -1), b = keyAdd(today(), 70); return evs.filter((e) => e.debut.slice(0, 10) >= a && e.debut.slice(0, 10) <= b); }
+  function keyAdd(k, n) { const d = new Date(k + "T12:00:00"); d.setDate(d.getDate() + n); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  const edtUrl = () => { const u = String((I.edt || {}).url || "").trim().replace(/^webcal:\/\//i, "https://"); return /^https:\/\//.test(u) ? u : null; };
+  let edtBusy = false;
+  async function edtRefresh(force) {
+    const url = edtUrl(); if (!url || edtBusy) return; edtBusy = true;
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const txt = await res.text();
+      if (!/BEGIN:VCALENDAR/.test(txt)) throw new Error("ce n'est pas un calendrier .ics");
+      const evs = fenetre(parseICS(txt));
+      edtErr = null; edtLu = now();
+      const same = self.CockpitMerge.equal(evs, (I.edt || {}).events || []); // comparaison sans tenir compte de l'ordre des champs
+      if (!same) saveIut((d) => { d.edt.events = evs; d.edt.lu = edtLu; d.edt.source = "appli"; }); // `erreur` appartient à la routine : l'appli n'y touche pas
+      else if (view === "edt" || view === "accueil") render();
+    } catch (e) {
+      edtErr = "L'appli n'a pas pu lire le lien directement (" + (e && e.message ? e.message : "réseau") + ") : la copie faite par Margaux chaque heure est affichée.";
+      if (view === "edt" || view === "accueil") render();
+    } finally { edtBusy = false; }
+  }
+  // changements depuis la dernière consultation (repère gardé sur l'appareil, jamais dans le dépôt)
+  const sig = (e) => JSON.stringify([e.debut, e.fin || null, e.titre || "", e.lieu || "", e.annule ? 1 : 0]);
+  const unsig = (x) => { try { const a = JSON.parse(x); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
+  function vuEdt() { try { return JSON.parse(localStorage.getItem("acad-edt-vu") || "null"); } catch (e) { return null; } }
+  function setVuEdt(evs) { try { const o = {}; evs.forEach((e) => (o[e.id] = sig(e))); localStorage.setItem("acad-edt-vu", JSON.stringify(o)); } catch (e) { /* sans stockage : pas de repère */ } }
+  // à l'ouverture de l'onglet : les changements sont montrés pendant cette visite, puis comptent comme vus
+  let edtVisite = null;
+  function entreeEdt() { const evs = ((I.edt || {}).events || []).filter((e) => e && e.debut); edtVisite = changes(evs); if (evs.length) setVuEdt(evs); }
+  function changesVisite(evs) {
+    const c = changes(evs), v = edtVisite || { etat: {}, supprimes: [] }, ids = new Set(evs.map((e) => e.id));
+    const etat = Object.assign({}, v.etat, c.etat); Object.keys(etat).forEach((id) => { if (!ids.has(id)) delete etat[id]; });
+    const sup = v.supprimes.filter((x) => !ids.has(x.id)); c.supprimes.forEach((x) => { if (!sup.some((y) => y.id === x.id)) sup.push(x); });
+    return { etat, supprimes: sup };
+  }
+  function changes(evs) {
+    const vu = vuEdt(); if (!vu) return { etat: {}, supprimes: [] };
+    const etat = {}; evs.forEach((e) => { if (!(e.id in vu)) etat[e.id] = "nouveau"; else if (vu[e.id] !== sig(e)) etat[e.id] = "modifie"; });
+    const ids = new Set(evs.map((e) => e.id)), t = today();
+    const supprimes = Object.keys(vu).map((id) => ({ id, a: unsig(vu[id]) })).filter((x) => !ids.has(x.id) && typeof x.a[0] === "string" && x.a[0].slice(0, 10) >= t).map((x) => ({ id: x.id, debut: x.a[0], titre: x.a[2] }));
+    return { etat, supprimes };
+  }
+  const hm = (iso) => (iso ? iso.slice(11, 16).replace(":", " h ") : "");
+  function evHtml(e, etat) {
+    return '<div class="cours' + (e.annule ? " annule" : "") + (etat ? " ch-" + esc(etat) : "") + '"><span class="h">' + (e.jour ? "Journée" : esc(hm(e.debut)) + (e.fin ? "<br>" + esc(hm(e.fin)) : "")) + '</span><div><b>' + esc(e.titre || "Sans titre") + "</b>" + (e.lieu ? '<span class="meta">' + esc(e.lieu) + "</span>" : "") + (e.desc ? '<span class="meta desc">' + esc(e.desc) + "</span>" : "") + "</div>" + (e.annule ? '<span class="tagc">annulé</span>' : etat === "nouveau" ? '<span class="tagc">nouveau</span>' : etat === "modifie" ? '<span class="tagc">modifié</span>' : "") + "</div>";
+  }
+  function edtState() {
+    const evs = ((I.edt || {}).events || []).filter((e) => e && e.debut);
+    const E = I.edt || {}, quand = (iso) => esc(new Date(iso).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }));
+    const etat = edtLu ? "Lu sur le site de l'IUT " + quand(edtLu) : E.lu ? "Copie de Margaux (relue chaque heure) · dernier changement " + quand(E.lu) : "Pas encore lu";
+    const info = !E.url ? '<p class="hint">Ajoute le lien de ton emploi du temps dans les Réglages (⚙︎).</p>' : (edtErr ? '<p class="warn">' + esc(edtErr) + "</p>" : "") + (!edtLu && E.erreur ? '<p class="warn">Margaux n\'a pas pu lire le lien non plus : ' + esc(E.erreur) + ". Vérifie le lien dans les Réglages.</p>" : "") + '<p class="hint">' + etat + "</p>";
+    return { evs, info };
+  }
+  function edtJourHtml() {
+    const el = $("#edt-jour"); if (!el) return;
+    const { evs, info } = edtState(), ch = changes(evs), t = today(), dm = keyAdd(t, 1);
+    const auj = evs.filter((e) => e.debut.startsWith(t)), dem = evs.filter((e) => e.debut.startsWith(dm));
+    const nbCh = Object.keys(ch.etat).length + ch.supprimes.length;
+    el.innerHTML = '<div class="card"><div class="head2"><h2>Aujourd\'hui</h2><a href="#edt">Emploi du temps →</a></div>' + (nbCh ? '<p class="warn">' + nbCh + " changement" + (nbCh > 1 ? "s" : "") + " depuis ta dernière consultation de l'emploi du temps.</p>" : "") +
+      (auj.length ? auj.map((e) => evHtml(e, ch.etat[e.id])).join("") : '<p class="empty">Pas de cours aujourd\'hui.</p>') +
+      '<h3>Demain</h3>' + (dem.length ? dem.map((e) => evHtml(e, ch.etat[e.id])).join("") : '<p class="empty">Pas de cours demain.</p>') + info + "</div>";
+  }
+  function rEdt() {
+    const { evs, info } = edtState(), ch = changesVisite(evs), t = today();
+    const jours = {}; evs.filter((e) => e.debut.slice(0, 10) >= t && e.debut.slice(0, 10) <= keyAdd(t, 20)).forEach((e) => (jours[e.debut.slice(0, 10)] = jours[e.debut.slice(0, 10)] || []).push(e));
+    $("#edt-list").innerHTML = '<div class="row"><button class="btn" type="button" id="edt-maj">Actualiser</button></div>' + info +
+      (ch.supprimes.length ? '<div class="card"><h2>Retirés depuis ta dernière visite</h2>' + ch.supprimes.map((x) => '<p class="meta">' + esc(fdate(x.debut.slice(0, 10))) + " · " + esc(hm(x.debut)) + " · " + esc(x.titre || "") + "</p>").join("") + "</div>" : "") +
+      (Object.keys(jours).length ? Object.keys(jours).sort().map((k) => '<div class="card"><h2>' + esc(fdate(k)) + "</h2>" + jours[k].map((e) => evHtml(e, ch.etat[e.id])).join("") + "</div>").join("") : '<p class="empty">Aucun cours dans les 3 prochaines semaines.</p>');
+    on("#edt-maj", "click", () => { toast("Actualisation…"); edtRefresh(true); });
+  }
+  function rReglagesIut() {
+    const el = $("#set-edt"); if (!el) return;
+    el.value = (I.edt || {}).url || "";
+  }
+
+  // ---------- IUT : contacts ----------
+  const CATS = { enseignant: "Enseignants", scolarite: "Scolarité et secrétariat", sante: "Santé et handicap", entreprise: "Entreprise et alternance", autre: "Autres" };
+  const telHref = (t) => { const v = String(t || "").replace(/[^\d+]/g, ""); return /^\+?\d{6,15}$/.test(v) ? "tel:" + v : null; };
+  const mailHref = (m) => (/^[^\s@<>"'?&]+@[^\s@<>"'?&]+\.[a-z]{2,}$/i.test(String(m || "").trim()) ? "mailto:" + String(m).trim() : null);
+  let ctEdit = null, ctQ = "";
+  function rContacts() {
+    const q = ctQ.trim().toLowerCase();
+    const list = (I.contacts || []).filter((c) => !q || [c.nom, c.role, c.note, c.bureau].join(" ").toLowerCase().includes(q));
+    const groups = {}; list.forEach((c) => (groups[CATS[c.categorie] ? c.categorie : "autre"] = groups[CATS[c.categorie] ? c.categorie : "autre"] || []).push(c));
+    $("#ct-list").innerHTML = Object.keys(CATS).filter((k) => groups[k]).map((k) => '<div class="card"><h2>' + CATS[k] + "</h2>" + groups[k].sort((a, b) => (a.nom || "").localeCompare(b.nom || "")).map((c) => {
+      const tel = telHref(c.tel), mail = mailHref(c.email);
+      return '<div class="ct"><div><b>' + esc(c.nom) + '</b><span class="meta">' + esc([c.role, c.bureau].filter(Boolean).join(" · ")) + "</span>" + (c.note ? '<span class="meta">' + esc(c.note) + "</span>" : "") +
+        (!tel && !mail ? '<span class="meta warn-t">Coordonnées à compléter</span>' : "") + '</div><div class="ct-act">' +
+        (tel ? '<a class="btn sm" href="' + esc(tel) + '">Appeler</a>' : "") + (mail ? '<a class="btn sm" href="' + esc(mail) + '">Écrire</a>' : "") +
+        '<button class="btn sm ghost" type="button" data-ct-edit="' + esc(c.id) + '">Modifier</button></div></div>';
+    }).join("") + "</div>").join("") || '<p class="empty">' + (q ? "Aucun contact trouvé." : "Pas encore de contact.") + "</p>";
+    $$("#ct-list [data-ct-edit]").forEach((b) => b.addEventListener("click", () => openCt(b.dataset.ctEdit)));
+  }
+  function openCt(id) {
+    const c = (I.contacts || []).find((x) => x.id === id) || { categorie: "enseignant" }; ctEdit = id || null;
+    const f = $("#ct-form"); f.hidden = false;
+    $("#ct-nom").value = c.nom || ""; $("#ct-role").value = c.role || ""; $("#ct-cat").value = c.categorie || "autre"; $("#ct-email").value = c.email || ""; $("#ct-tel").value = c.tel || ""; $("#ct-bureau").value = c.bureau || ""; $("#ct-note").value = c.note || "";
+    $("#ct-nom").focus();
+  }
+  function bindIut() {
+    on("#ct-add", "click", () => openCt(null));
+    on("#ct-cancel", "click", () => { $("#ct-form").hidden = true; ctEdit = null; });
+    on("#ct-q", "input", (e) => { ctQ = e.target.value; rContacts(); });
+    on("#ct-form", "submit", (e) => {
+      e.preventDefault(); const nom = $("#ct-nom").value.trim(); if (!nom) return;
+      const val = { nom, role: $("#ct-role").value.trim(), categorie: $("#ct-cat").value, email: $("#ct-email").value.trim(), tel: $("#ct-tel").value.trim(), bureau: $("#ct-bureau").value.trim(), note: $("#ct-note").value.trim(), maj: now() };
+      if (val.email && !mailHref(val.email)) { toast("Adresse mail invalide"); return; }
+      if (val.tel && !telHref(val.tel)) { toast("Numéro de téléphone invalide"); return; }
+      const id = ctEdit;
+      saveIut((d) => { const x = id && d.contacts.find((y) => y.id === id); if (x) Object.assign(x, val); else d.contacts.push(Object.assign({ id: uid() }, val)); });
+      $("#ct-form").hidden = true; ctEdit = null; toast("Contact enregistré");
+    });
+    on("#set-edt-form", "submit", (e) => {
+      e.preventDefault(); const u = $("#set-edt").value.trim().replace(/^webcal:\/\//i, "https://");
+      if (u && !/^https:\/\//.test(u)) { toast("Le lien doit commencer par https:// ou webcal://"); return; }
+      const change = u !== ((I.edt || {}).url || "");
+      if (change) { edtLu = null; edtErr = null; }
+      saveIut((d) => { d.edt.url = u || null; if (change) d.edt.lu = null; if (!u) d.edt.events = []; });
+      toast(u ? "Lien enregistré : lecture de l'emploi du temps…" : "Lien retiré"); if (u) edtRefresh(true);
+    });
   }
 
   // ---------- navigation et formulaires ----------
   function go(v) { if (location.hash !== "#" + v) location.hash = v; else { view = v; render(); } }
-  function route() { let v = (location.hash || "#accueil").slice(1); try { v = decodeURIComponent(v); } catch (er) { v = "accueil"; } current = null; if (v.startsWith("devoir/")) { current = v.slice(7); v = "devoir"; } else if (v.startsWith("prof/")) { current = v.slice(5); v = "prof"; } view = $('.view[data-view="' + v + '"]') ? v : "accueil"; render(); $("#main").focus({ preventScroll: true }); window.scrollTo(0, 0); }
+  function route() { let v = (location.hash || "#accueil").slice(1); try { v = decodeURIComponent(v); } catch (er) { v = "accueil"; } current = null; if (v.startsWith("devoir/") && IUT) { current = v.slice(7); v = "devoir"; } else if (v.startsWith("prof/")) { current = v.slice(5); v = "prof"; } v = $('.view[data-view="' + v + '"]') ? v : "accueil"; if (IUT && v === "edt" && view !== "edt") entreeEdt(); view = v; render(); $("#main").focus({ preventScroll: true }); window.scrollTo(0, 0); }
 
+  const on = (sel, ev, fn) => { const el = $(sel); if (el) el.addEventListener(ev, fn); };
   function bind() {
     window.addEventListener("hashchange", route);
-    $("#dv-add-open").addEventListener("click", () => { $("#dv-form").hidden = false; fillMatSelect($("#dv-mat"), "iut"); $("#dv-titre").focus(); });
-    $("#dv-cancel").addEventListener("click", () => ($("#dv-form").hidden = true));
-    $("#dv-form").addEventListener("submit", (e) => {
+    if (IUT) bindIut();
+    if ($("#dv-add-open")) $("#dv-add-open").addEventListener("click", () => { $("#dv-form").hidden = false; fillMatSelect($("#dv-mat"), "iut"); $("#dv-titre").focus(); });
+    on("#dv-cancel", "click", () => ($("#dv-form").hidden = true));
+    on("#dv-form", "submit", (e) => {
       e.preventDefault();
       const titre = $("#dv-titre").value.trim(); if (!titre) return;
       const m = mat($("#dv-mat").value);
       save((d) => d.devoirs.push({ id: uid(), titre, matiere: m.id, prof: profDe(m), due: $("#dv-due").value || null, source: "app", docs: $("#dv-docs").value.trim(), statut: "nouveau", created: now(), maj: now() }));
       e.target.reset(); $("#dv-form").hidden = true; toast("Devoir ajouté : Odile le confie à " + profDe(m));
     });
-    $("#se-add-open").addEventListener("click", () => openSeance());
-    $("#se-cancel").addEventListener("click", () => ($("#se-form").hidden = true));
-    $("#se-form").addEventListener("submit", (e) => {
+    on("#se-add-open", "click", () => openSeance());
+    on("#se-cancel", "click", () => ($("#se-form").hidden = true));
+    on("#se-form", "submit", (e) => {
       e.preventDefault();
       const m = mat($("#se-mat").value);
       save((d) => d.seances.push({ id: uid(), date: now(), matiere: m.id, prof: profDe(m), mode: $("#se-mode").value, duree: Number($("#se-duree").value) || 20, bilan: $("#se-bilan").value.trim(), suite: $("#se-suite").value.trim(), maj: now() }));
       e.target.reset(); $("#se-form").hidden = true; toast("Séance notée. Bravo.");
     });
-    $("#id-form").addEventListener("submit", (e) => {
+    on("#id-form", "submit", (e) => {
       e.preventDefault();
       const texte = $("#id-text").value.trim(); if (!texte) return;
-      save((d) => d.idees.push({ id: uid(), texte, created: now(), statut: "nouveau", maj: now() }));
+      save((d) => d.idees.push(Object.assign({ id: uid(), texte, created: now(), statut: "nouveau", maj: now() }, IUT ? { app: "iut" } : {})));
       e.target.reset(); toast("Idée envoyée à Margaux");
     });
     $("#set-import").addEventListener("click", async () => { $("#set-msg").textContent = "…"; const r = await S.useSettingsFrom("cockpit-app"); $("#set-msg").textContent = r.ok ? "Réglages repris du Cockpit." : r.text; rReglages(); });
     $("#set-sync").addEventListener("click", async () => { await S.sync(); rReglages(); });
-    S.on("change", (n, data) => { if (n === "academie") { A = data || A; render(); } });
+    S.on("change", (n, data) => { if (n === "academie") { A = data || A; render(); } if (n === "iut") { I = data || I; if (view === "edt" || view === "contacts" || view === "accueil" || view === "reglages") render(); } });
     S.on("status", (st) => { $("#sync-dot").className = "dot " + st.level; $("#sync-t").textContent = st.text; if (view === "reglages") rReglages(); });
   }
 
   (async function start() {
     bind();
     const snap = await S.init();
-    A = snap.academie || A;
+    A = snap.academie || A; if (snap.iut) I = snap.iut;
     route();
+    if (IUT) { edtRefresh(); setInterval(() => { if (document.visibilityState === "visible") edtRefresh(); }, 10 * 60 * 1000); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") edtRefresh(); }); }
     S.sync();
     if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
   })();

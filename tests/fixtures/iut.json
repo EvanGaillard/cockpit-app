@@ -1,0 +1,42 @@
+{
+ "contacts": [
+  {
+   "bureau": "Bâtiment A",
+   "categorie": "sante",
+   "email": "infirmerie@example.invalid",
+   "id": "ct000001",
+   "maj": "2026-11-27T08:00:00Z",
+   "nom": "Mme Exemple (simulation)",
+   "note": "",
+   "role": "Infirmière, référente handicap",
+   "tel": "04 00 00 00 00"
+  },
+  {
+   "bureau": "",
+   "categorie": "enseignant",
+   "email": "",
+   "id": "ct000002",
+   "maj": "2026-11-27T08:00:00Z",
+   "nom": "M. Test (simulation)",
+   "note": "",
+   "role": "R5.06 · VBA",
+   "tel": ""
+  },
+  {
+   "bureau": "",
+   "categorie": "autre",
+   "email": "javascript:alert(1)",
+   "id": "ct000003",
+   "maj": "2026-11-27T08:00:00Z",
+   "nom": "<img src=x onerror=alert(1)>",
+   "note": "",
+   "role": "Piège",
+   "tel": "javascript:alert(1)"
+  }
+ ],
+ "edt": {
+  "events": [],
+  "url": null
+ },
+ "maj": "2026-11-27T08:00:00Z"
+}

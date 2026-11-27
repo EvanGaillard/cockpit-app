@@ -29,7 +29,7 @@ async function until(fn, ms) { const t0 = Date.now(); while (Date.now() - t0 < (
     await page.fill("#set-owner", DEFAULT_REPO.owner); await page.fill("#set-repo", DEFAULT_REPO.repo); await page.fill("#set-dir", DEFAULT_REPO.dir);
     await page.fill("#set-token", TOKEN); await page.click("#set-form button[type=submit]");
     await until(async () => (await page.textContent("#sync-t")) === "À jour");
-    await page.goto(BASE + "academie/");
+    await page.goto(BASE + "iut/");
     await until(async () => (await page.textContent("#sync-t")) === "À jour");
     await until(async () => /Compte rendu de TP/.test(await page.textContent("#reco")));
     const commits0 = mock.commits.length;

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>IUT</title>
+<meta name="description" content="L'IUT et l'alternance : emploi du temps, devoirs, contacts.">
+<meta name="theme-color" content="#F4F5F7">
+<meta name="color-scheme" content="light">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="IUT">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="../icons/icon-192.png">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+<link rel="stylesheet" href="../academie/styles.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="iut">
+<div class="app">
+  <header class="top">
+    <div class="top-in">
+      <a class="brand" href="#accueil">IUT</a>
+      <a class="back" href="../">← Cockpit</a>
+      <span class="sub" id="greet">IUT et alternance</span>
+      <a class="sync" href="#reglages" aria-label="Synchronisation et réglages"><span class="dot wait" id="sync-dot"></span><span id="sync-t">Démarrage…</span></a>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Navigation">
+    <a href="#accueil" data-v="accueil">Aujourd'hui</a>
+    <a href="#edt" data-v="edt">Emploi du temps</a>
+    <a href="#devoirs" data-v="devoirs">Devoirs<span class="badge" id="dv-badge" hidden></span></a>
+    <a href="#contacts" data-v="contacts">Contacts</a>
+    <a href="#profs" data-v="profs">Profs<span class="badge" id="pf-badge" hidden></span></a>
+    <a href="#seances" data-v="seances">Séances</a>
+    <a href="#idees" data-v="idees">Idées</a>
+    <a href="#reglages" data-v="reglages" class="gear" aria-label="Réglages">⚙︎</a>
+  </nav>
+
+  <main id="main" tabindex="-1">
+    <section class="view" data-view="accueil">
+      <div id="edt-jour"></div>
+      <div id="reco"></div>
+      <div class="card"><h2>Prochains devoirs</h2><div id="next-dv"></div></div>
+    </section>
+
+    <section class="view" data-view="edt">
+      <div class="head"><h1>Emploi du temps</h1></div>
+      <div id="edt-list"></div>
+    </section>
+
+    <section class="view" data-view="devoirs">
+      <div class="head"><h1>Devoirs</h1><button class="btn" type="button" id="dv-add-open">+ Ajouter</button></div>
+      <p class="hint">Odile repère les travaux dans tes mails et sur Moodle, puis le prof responsable propose un premier rendu. Pour un travail noté, ce rendu est une base que tu retravailles toi-même.</p>
+      <form class="card form" id="dv-form" hidden>
+        <label>Titre<input id="dv-titre" required maxlength="160"></label>
+        <div class="row"><label>Matière<select id="dv-mat"></select></label><label>Pour le<input id="dv-due" type="date"></label></div>
+        <label>Documents ou consigne (facultatif)<input id="dv-docs" maxlength="300"></label>
+        <div class="row end"><button class="btn ghost" type="button" id="dv-cancel">Annuler</button><button class="btn primary" type="submit">Ajouter</button></div>
+      </form>
+      <div class="filters" id="dv-filters"></div>
+      <div id="dv-list"></div>
+    </section>
+
+    <section class="view" data-view="devoir" aria-label="Fiche du devoir">
+      <div id="dv-detail"></div>
+    </section>
+
+    <section class="view" data-view="contacts">
+      <div class="head"><h1>Contacts</h1><button class="btn" type="button" id="ct-add">+ Ajouter</button></div>
+      <label class="sr" for="ct-q">Chercher un contact</label><input id="ct-q" type="search" placeholder="Chercher (nom, rôle, matière…)" autocomplete="off">
+      <form class="card form" id="ct-form" novalidate hidden>
+        <div class="row"><label>Nom<input id="ct-nom" required maxlength="120"></label><label>Catégorie<select id="ct-cat"><option value="enseignant">Enseignant</option><option value="scolarite">Scolarité et secrétariat</option><option value="sante">Santé et handicap</option><option value="entreprise">Entreprise et alternance</option><option value="autre">Autre</option></select></label></div>
+        <label>Rôle ou matière<input id="ct-role" maxlength="160"></label>
+        <div class="row"><label>Mail<input id="ct-email" type="email" inputmode="email" maxlength="160" autocomplete="off"></label><label>Téléphone<input id="ct-tel" type="tel" inputmode="tel" maxlength="30" autocomplete="off"></label></div>
+        <label>Bureau ou lieu<input id="ct-bureau" maxlength="120"></label>
+        <label>Note (horaires, quand le joindre…)<input id="ct-note" maxlength="300"></label>
+        <div class="row end"><button class="btn ghost" type="button" id="ct-cancel">Annuler</button><button class="btn primary" type="submit">Enregistrer</button></div>
+      </form>
+      <div id="ct-list"></div>
+    </section>
+
+    <section class="view" data-view="profs">
+      <div class="head"><h1>Profs</h1></div>
+      <p class="hint">Victor (cours de l'IUT) et Margaux (référente IUT et entreprise). La réponse arrive ici, dans l'heure.</p>
+      <div class="pfs" id="pf-list"></div>
+    </section>
+
+    <section class="view" data-view="prof" aria-label="Conversation">
+      <div id="pf-conv"></div>
+    </section>
+
+    <section class="view" data-view="seances">
+      <div class="head"><h1>Séances</h1><button class="btn" type="button" id="se-add-open">+ Noter une séance</button></div>
+      <form class="card form" id="se-form" hidden>
+        <div class="row"><label>Matière<select id="se-mat"></select></label><label>Mode<select id="se-mode"><option value="oral">Oral</option><option value="ecrit">Écrit</option></select></label><label>Durée (min)<input id="se-duree" type="number" min="5" max="240" step="5" value="20"></label></div>
+        <label>Bilan (ce que tu as retenu)<textarea id="se-bilan" rows="3" maxlength="1200"></textarea></label>
+        <label>Prochaine étape<input id="se-suite" maxlength="200"></label>
+        <div class="row end"><button class="btn ghost" type="button" id="se-cancel">Annuler</button><button class="btn primary" type="submit">Enregistrer</button></div>
+      </form>
+      <div id="se-list"></div>
+    </section>
+
+    <section class="view" data-view="idees">
+      <div class="head"><h1>Idées et tickets</h1></div>
+      <p class="hint">Une idée, un bug, une envie pour l'appli IUT : Margaux et Hugo la reprennent.</p>
+      <form class="card form" id="id-form"><label class="sr" for="id-text">Ton idée</label><textarea id="id-text" rows="2" maxlength="600" placeholder="Par exemple : « afficher les salles en gros »"></textarea><div class="row end"><button class="btn primary" type="submit">Envoyer</button></div></form>
+      <div id="id-list"></div>
+    </section>
+
+    <section class="view" data-view="reglages">
+      <div class="head"><h1>Réglages</h1></div>
+      <div class="card">
+        <p>L'appli IUT utilise le même dépôt de données privé et le même jeton que le Cockpit sur cet appareil.</p>
+        <p class="st-line"><span class="dot wait" id="set-dot"></span><span id="set-status">…</span></p>
+        <p class="hint" id="set-repo"></p>
+        <div class="row"><button class="btn primary" type="button" id="set-import">Reprendre les réglages du Cockpit</button><button class="btn" type="button" id="set-sync">Synchroniser</button></div>
+        <p class="hint" id="set-msg" role="status"></p>
+        <p class="hint">Pas encore de Cockpit réglé sur cet appareil ? Ouvre le <a href="../#reglages">Cockpit</a>, règle le dépôt et le jeton, puis reviens ici.</p>
+      </div>
+      <form class="card form" id="set-edt-form" novalidate>
+        <h2>Emploi du temps de l'IUT</h2>
+        <label>Lien de l'emploi du temps (.ics, commence par https:// ou webcal://)<input id="set-edt" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…"></label>
+        <p class="hint">Dans l'emploi du temps de l'IUT, cherche « Exporter », « Synchroniser » ou « iCal », puis copie le lien. Il reste dans ton dépôt privé, jamais dans le code. L'appli le relit à chaque ouverture et toutes les 10 minutes ; Margaux en fait aussi une copie chaque heure.</p>
+        <div class="row end"><button class="btn primary" type="submit">Enregistrer</button></div>
+      </form>
+      <p class="hint ver" id="ver"></p>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script>self.ACAD_MODE = "iut";</script>
+<script>self.STORE_CONFIG = { dbName: "iut-app", docs: ["academie", "iut"], readonly: [], importFrom: "cockpit-app", empty: { academie: { matieres: [], devoirs: [], seances: [], idees: [], messages: [] }, iut: { edt: { url: null, events: [] }, contacts: [] } } };</script>
+<script src="../merge.js"></script>
+<script src="../store.js"></script>
+<script src="../academie/app.js"></script>
+</body>
+</html>
