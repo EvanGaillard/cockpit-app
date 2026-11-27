@@ -32,7 +32,7 @@ async function until(fn, ms) { const t0 = Date.now(); while (Date.now() - t0 < (
     const resync = () => page.evaluate(() => window.dispatchEvent(new Event("online")));
     const M = () => mock.json("academie.json").messages || [];
 
-    check(label + " · 14 personnes (Margaux, 12 profs, Samuel), toutes joignables", (await page.locator("#pf-list .pf").count()) === 14 && (await page.locator("#pf-list .pf.off").count()) === 0);
+    check(label + " · 13 personnes (Margaux, 11 profs, Samuel, sans Victor), toutes joignables", (await page.locator("#pf-list .pf").count()) === 13 && !/Victor/.test(await page.textContent("#pf-list")) && (await page.locator("#pf-list .pf.off").count()) === 0);
     check(label + " · pas de défilement horizontal · liste", await noH());
     await page.screenshot({ path: path.join(SHOTS, slug + "-1-profs.png"), fullPage: true });
     await page.click('#pf-list a[href="#prof/ingrid"]');

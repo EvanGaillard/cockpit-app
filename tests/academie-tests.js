@@ -1,4 +1,5 @@
-// Tests de l'Académie (academie/) dans Chromium, avec le faux GitHub et des données FICTIVES.
+// Tests de l'Académie (academie/, apprentissages perso, sans l'IUT) dans Chromium, avec le faux GitHub et des données FICTIVES.
+// Les devoirs, l'emploi du temps et les contacts de l'IUT sont testés par tests/iut-tests.js.
 // Usage : node tests/academie-tests.js [dossier-des-captures]
 "use strict";
 const http = require("http"), fs = require("fs"), os = require("os"), path = require("path");
@@ -11,7 +12,7 @@ function serve() { return new Promise((resolve) => { const srv = http.createServ
 let failed = 0; const out = [];
 function check(n, c, d) { console.error((c ? "ok " : "KO ") + n); out.push((c ? "ok    · " : "ÉCHEC · ") + n + (d ? " · " + d : "")); if (!c) failed++; }
 async function until(fn, ms) { const t0 = Date.now(); while (Date.now() - t0 < (ms || 10000)) { try { if (await fn()) return true; } catch (e) {} await new Promise((r) => setTimeout(r, 100)); } return false; }
-const VIEWS = ["accueil", "devoirs", "profs", "matieres", "seances", "idees", "reglages"];
+const VIEWS = ["accueil", "profs", "matieres", "seances", "idees", "reglages"];
 (async () => {
   const srv = await serve(), BASE = "http://127.0.0.1:" + srv.address().port + "/";
   const browser = await chromium.launch(); const errors = [];
@@ -39,35 +40,18 @@ const VIEWS = ["accueil", "devoirs", "profs", "matieres", "seances", "idees", "r
     check(label + " : bouton « Académie » du Cockpit ouvre l'Académie", await until(async () => (await page.title()) === "Académie"));
     await page.goto(BASE + "academie/");
     check(label + " : réglages du Cockpit repris tout seuls, synchro « À jour »", await until(async () => (await page.textContent("#sync-t")) === "À jour"));
-    check(label + " : recommandation = devoir urgent", await until(async () => /Compte rendu de TP/.test(await page.textContent("#reco"))));
+    check(label + " : recommandation = une matière perso, jamais un devoir IUT", await until(async () => { const t = await page.textContent("#reco"); return /avec /.test(t) && !/Compte rendu de TP|Projet tutoré|Voir le devoir/.test(t); }));
     const slug = label.split(" ")[0];
     for (const v of VIEWS) { await page.evaluate((h) => (location.hash = h), v); await page.waitForTimeout(150); check(label + " : pas de défilement horizontal · " + v, await noH(page)); await page.screenshot({ path: path.join(SHOTS, slug + "-" + v + ".png"), fullPage: true }); }
-    // ---- parcours d'un devoir IUT (données simulées) ----
-    const before = mock.commits.length;
-    await page.evaluate(() => (location.hash = "devoirs"));
-    check(label + " : liste : le projet simulé affiche « date à vérifier »", await until(async () => /Projet tutoré VBA \(simulation\)[\s\S]*date à vérifier/.test(await page.textContent("#dv-list"))));
-    await page.click('#dv-list a[href="#devoir/dvsim506"]');
-    check(label + " : fiche ouverte", await until(async () => /Projet tutoré VBA/.test(await page.textContent("#dv-detail"))));
-    check(label + " : consigne non résumée : les sujets sont désignés", (await page.locator("#dv-sujet .sujet").count()) === 2);
-    check(label + " : prochaine échéance = « À vérifier »", (await page.textContent("#dv-next")).trim() === "À vérifier");
-    const prof = await page.textContent("#dv-prof");
-    check(label + " : attribué à Margaux, en attendant Victor", /Margaux/.test(prof) && /Victor/.test(prof), prof.trim());
-    check(label + " : agenda laissé intact (date non confirmée)", /Rien dans ton agenda : la date n'est pas confirmée/.test(await page.textContent("#dv-agenda")));
-    check(label + " : 5 documents listés, chemins PC copiables", (await page.locator("#dv-docs .docl").count()) === 5 && (await page.locator("#dv-docs [data-copy]").count()) === 3);
-    check(label + " : lien javascript: neutralisé", (await page.locator('#dv-docs a[href^="javascript"]').count()) === 0 && (await page.locator('#dv-docs a[href^="https://moodle.example.invalid"]').count()) === 1);
-    check(label + " : échéance passée et échéance à vérifier affichées", (await page.locator("#dv-ech .ech-passee").count()) === 1 && (await page.locator("#dv-ech .ech-a_verifier").count()) === 1);
-    check(label + " : questions ouvertes (Margaux, Sami)", /Margaux/.test(await page.textContent("#dv-q")) && /Sami/.test(await page.textContent("#dv-q")));
-    check(label + " : pas de défilement horizontal · fiche devoir", await noH(page));
-    await page.screenshot({ path: path.join(SHOTS, slug + "-devoir.png"), fullPage: true });
-    check(label + " : consulter ne modifie rien dans le dépôt", mock.commits.length === before);
-    await page.evaluate(() => (location.hash = "devoir/dvxss001"));
-    await page.evaluate(() => (location.hash = "devoir/%E0%A4%A"));
-    check(label + " : adresse mal formée : pas de plantage, retour à l'accueil", await until(async () => /Bonjour|Bon après-midi|Bonsoir/.test(await page.textContent("#greet"))));
-    check(label + " : titre piégé affiché comme du texte", await until(async () => (await page.textContent("#dv-detail")).includes("<img src=x onerror=alert(1)>")) && (await page.locator("#dv-detail img").count()) === 0);
+    // ---- l'IUT n'est plus dans l'Académie ----
+    check(label + " : pas d'onglet Devoirs", (await page.locator('.tabs a[href="#devoirs"]').count()) === 0);
+    check(label + " : accueil : lien vers l'appli IUT", (await page.locator('a[href="../iut/"]').count()) === 1);
+    await page.evaluate(() => (location.hash = "devoir/dvsim506"));
+    check(label + " : une ancienne adresse de devoir ramène à l'accueil", await until(async () => (await page.isVisible('.view[data-view="accueil"]'))));
     await page.evaluate(() => (location.hash = "accueil"));
     check(label + " : lien « ← Cockpit » présent", (await page.getAttribute(".back", "href")) === "../");
     await page.evaluate(() => (location.hash = "matieres"));
-    check(label + " : 13 matières, toutes actives sauf le sport", (await page.locator(".mat").count()) === 13 && (await page.locator(".mat.off").count()) === 1);
+    check(label + " : 12 matières perso (sans l'IUT), toutes actives sauf le sport", (await page.locator(".mat").count()) === 12 && !/IUT/.test(await page.textContent("#mats")) && (await page.locator(".mat.off").count()) === 1);
     await ctx.close();
   }
   { // écritures (ordinateur)
@@ -81,25 +65,12 @@ const VIEWS = ["accueil", "devoirs", "profs", "matieres", "seances", "idees", "r
     await page.evaluate(() => (location.hash = "seances")); await page.click("#se-add-open");
     await page.selectOption("#se-mat", "darija"); await page.fill("#se-bilan", "Cinq mots (test)"); await page.click("#se-form button[type=submit]");
     check("séance écrite dans le dépôt", await until(() => mock.json("academie.json").seances.some((s) => s.matiere === "darija" && s.prof === "Yasmine" && s.bilan === "Cinq mots (test)")));
-    await page.evaluate(() => (location.hash = "devoirs")); await page.click("#dv-add-open");
-    await page.fill("#dv-titre", "Devoir de test"); await page.selectOption("#dv-mat", "energie"); await page.click("#dv-form button[type=submit]");
-    check("devoir confié au prof de la matière (Étienne)", await until(() => mock.json("academie.json").devoirs.some((d) => d.titre === "Devoir de test" && d.prof === "Étienne" && d.statut === "nouveau")));
-    // statut changé + écriture concurrente d'une routine (Margaux) : rien n'est perdu
-    mock.beforePut = () => mock.external("academie.json", (d) => d.devoirs.push({ id: "dvroutin", titre: "Ajouté par Odile", matiere: "iut", prof: "Victor", statut: "attribue", created: "2026-11-27T10:00:00Z", maj: "2026-11-27T10:00:00Z" }));
-    await page.selectOption('[data-st="dv000002"]', "premier_rendu");
-    check("conflit : statut gardé ET devoir de la routine gardé", await until(() => { const d = mock.json("academie.json").devoirs; return d.some((x) => x.id === "dvroutin") && (d.find((x) => x.id === "dv000002") || {}).statut === "premier_rendu"; }));
-    check("l'app affiche le devoir ajouté par la routine", await until(async () => /Ajouté par Odile/.test(await page.textContent("#dv-list"))));
-    // le Cockpit n'est pas touché par l'Académie
+    // écriture concurrente d'une routine (Margaux) : rien n'est perdu
+    mock.beforePut = () => mock.external("academie.json", (d) => d.seances.push({ id: "seroutin", date: "2026-11-27", matiere: "philo", prof: "Nour", mode: "oral", duree: 20, bilan: "Ajoutée par la routine", maj: "2026-11-27T10:00:00Z" }));
+    await page.evaluate(() => (location.hash = "idees")); await page.fill("#id-text", "Idée concurrente"); await page.click("#id-form button[type=submit]");
+    check("conflit : idée gardée ET séance de la routine gardée", await until(() => { const d = mock.json("academie.json"); return d.seances.some((x) => x.id === "seroutin") && d.idees.some((x) => x.texte === "Idée concurrente"); }));
+    check("les devoirs du document sont intacts (l'Académie ne les touche pas)", mock.json("academie.json").devoirs.length === 5);
     check("aucun autre document modifié par l'Académie", mock.commits.filter((c) => /^app : /.test(c.message)).every((c) => c.message === "app : academie"));
-    await page.evaluate(() => (location.hash = "devoir/dvsim506"));
-    await page.waitForSelector("#dv-detail [data-st]");
-    await page.selectOption("#dv-detail [data-st]", "premier_rendu");
-    check("fiche : changer le statut l'écrit dans le dépôt, échéances et documents intacts", await until(() => { const x = mock.json("academie.json").devoirs.find((y) => y.id === "dvsim506"); return x && x.statut === "premier_rendu" && x.echeances.length === 2 && x.documents.length === 5 && x.due === null; }));
-    mock.external("academie.json", (d) => d.devoirs.push({ id: "dvretard", titre: "Devoir en retard (test)", matiere: "philo", prof: "Nour", statut: "attribue", due: null, echeances: [{ id: "e1", libelle: "Rendu", date: "2026-01-05", statut: "confirmee" }], created: "2026-11-27T10:00:00Z", maj: "2026-11-27T10:00:00Z" }));
-    await page.evaluate(() => window.dispatchEvent(new Event("online")));
-    await page.evaluate(() => (location.hash = "accueil"));
-    check("accueil : un devoir confirmé (échéance seule, sans due) en retard est proposé en premier", await until(async () => /Devoir en retard \(test\)/.test(await page.textContent("#reco")), 12000));
-    check("accueil : le devoir en retard est en tête de liste, avant les dates à vérifier", await until(async () => /^Devoir en retard/.test((await page.textContent("#next-dv .dv b")).trim()), 5000));
     // le jeton n'est jamais recopié dans la base de l'Académie
     const tokInAcad = await page.evaluate(() => new Promise((res) => { const rq = indexedDB.open("academie-app"); rq.onsuccess = () => { const d = rq.result; const r = d.transaction("kv", "readonly").objectStore("kv").get("token"); r.onsuccess = () => res(r.result || null); r.onerror = () => res("err"); }; }));
     check("jeton absent de la base de l'Académie (relu dans le Cockpit)", tokInAcad === null);
