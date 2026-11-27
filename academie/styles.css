@@ -123,3 +123,13 @@ a.btn { text-decoration: none; display: inline-block; }
 #dv-detail .q b, #dv-detail .ech b, #dv-detail p, #dv-detail .meta, #dv-detail h1 { overflow-wrap: anywhere; }
 #dv-detail .q b { display: block; }
 #dv-detail .ech > div { min-width: 0; }
+.samuel { border-top: 1px dashed var(--line); padding-top: 10px; display: grid; gap: 8px; }
+.sam-q { margin: 0; font-size: 14px; font-weight: 600; color: var(--muted); }
+.sam-q .meta { display: inline; font-weight: 400; margin-left: 6px; }
+.sam-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sam-chips .pill { font-size: 13px; padding: 6px 11px; }
+.sam-chips .pill.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sam-plan { background: #F3F7FA; border-radius: 12px; padding: 10px 12px; }
+.sam-plan p { margin: 2px 0 6px; overflow-wrap: anywhere; }
+.sam-who { font-size: 12px; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; }
+.sam-time { font-weight: 700; font-variant-numeric: tabular-nums; margin-left: 6px; }

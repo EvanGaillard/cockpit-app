@@ -11,7 +11,7 @@
  * L'IA n'est pas dans l'app : les profs travaillent dans le bureau de Margaux et écrivent ce document avec ldata. */
 (function () {
   "use strict";
-  const APP_VERSION = "0.2.0";
+  const APP_VERSION = "0.3.0";
   const S = self.CockpitStore;
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
@@ -108,9 +108,74 @@
     const pick = list[0];
     return { kind: "delaissee", matiere: pick.m.id, titre: "Une séance de " + pick.m.nom.split(" · ")[0].toLowerCase(), raison: pick.last ? "Dernière séance il y a " + days(pick.last, t) + " j." : "Pas encore de séance : on commence en douceur, 20 minutes." };
   }
+  // ---------- Samuel : « comment veux-tu travailler ? » ----------
+  // Facultatif, en un geste, valable pour UNE séance : le choix vit seulement en mémoire (jamais dans le dépôt,
+  // ni dans le navigateur), il est oublié dès que la séance est lancée ou que la page est rechargée.
+  // Il change le premier pas proposé et ajoute une consigne pédagogique au message que le prof reçoit via Margaux.
+  const STYLES = { demarrer: "J'ai du mal à démarrer", doux: "Je veux y aller doucement", defi: "J'ai envie d'un défi" };
+  let sam = { key: null, st: null }, samTimer = null;
+  const samKey = (r) => (r.devoir ? "d:" + r.devoir.id : "m:" + r.matiere);
+  const samStyle = (r) => (sam.key === samKey(r) ? sam.st : null);
+  // premiers pas par matière (quand la séance ne porte pas sur un devoir)
+  const PAS = {
+    philo: { demarrer: "Ouvre ton livre à la page où tu t'es arrêté et lis une seule page. Note la phrase qui t'arrête.", defi: "Écris en 3 phrases la thèse inverse de ta dernière lecture : Nour la défendra contre toi." },
+    darija: { demarrer: "Dis à voix haute trois salutations que tu connais déjà : le matin, en arrivant, en partant.", defi: "Deux minutes de conversation sans un mot de français : Yasmine lance le sujet." },
+    anglais: { demarrer: "Lis à voix haute un paragraphe en anglais (article, cours ou mail) et relève un seul mot inconnu.", defi: "Défends une opinion en anglais pendant 2 minutes : Ingrid prend le contre-pied." },
+    iut: { demarrer: "Écris en une ligne la formule ou la définition dont tu te souviens le mieux dans ce module.", defi: "Refais de tête le dernier calcul vu en cours, puis vérifie-le ligne par ligne." },
+    "": { demarrer: "Écris en une ligne ce que tu sais déjà sur le sujet du jour.", defi: "Explique la notion clé sans notes en 2 minutes : le prof cherche la faille." },
+  };
+  function samuelPlan(r, st) {
+    const m = mat(r.matiere), d = r.devoir, prof = d ? String(d.prof || profDe(m)) : profDe(m);
+    const docs = d && Array.isArray(d.documents) ? d.documents : [];
+    const sujet = docs.find((x) => x.type === "consigne") || docs.find((x) => x.type === "sujet");
+    const last = (A.seances || []).filter((x) => x.matiere === r.matiere && x.suite).sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0];
+    const P = PAS[r.matiere] || PAS[""];
+    let pas, min;
+    if (st === "demarrer") {
+      min = 3;
+      pas = d ? (d.consigne ? "Relis la consigne et écris en une phrase ce que tu dois rendre, rien d'autre." : sujet ? "Ouvre « " + sujet.nom + " »" + (sujet.ou === "pc" ? " sur le PC" : "") + " et recopie en une phrase ce que tu dois rendre, rien d'autre." : "Écris en une phrase ce que tu dois rendre pour « " + d.titre + " », même approximativement.") : P.demarrer;
+    } else if (st === "doux") {
+      min = 15;
+      pas = last ? "Reprends l'étape notée la dernière fois : « " + last.suite + " »." : d ? prof + " te lit et t'explique la consigne pas à pas ; tu poses tes questions, tu ne produis rien de noté aujourd'hui." : "Une lecture ou une écoute courte guidée par " + prof + ", puis une seule question pour vérifier.";
+    } else {
+      min = 10;
+      pas = !d ? P.defi : !d.consigne && sujet ? "Lis « " + sujet.nom + " » en 5 minutes chrono, ferme-le, puis écris de mémoire le plan de ton rendu en 5 lignes : " + prof + " le confronte au sujet." : "Sans rouvrir la consigne, écris le plan de ton rendu en 5 lignes, puis confronte-le à la consigne avec " + prof + ".";
+    }
+    const tete = "Consigne de Samuel (pour cette séance seulement) : Evan a choisi « " + STYLES[st] + " ». ";
+    const prof_ = st === "demarrer" ? "Ouvre la séance directement par ce premier pas, sans introduction ni encouragement : « " + pas + " » (" + min + " min). Attends qu'il l'ait fait avant d'expliquer quoi que ce soit, puis enchaîne par une étape de la même taille. Une seule question à la fois."
+      : st === "doux" ? "Séance de " + min + " min au plus, rythme lent. Commence par : « " + pas + " ». Pas de nouvelle notion difficile, pas d'évaluation ; termine par une seule prochaine étape facile."
+      : "Ouvre par ce défi : « " + pas + " ». Niveau au-dessus de l'habituel, correction exigeante et précise ; termine par une question d'approfondissement.";
+    return { pas, min, consigne: tete + prof_ + " N'enregistre rien sur l'état d'Evan et ne commente ni sa motivation ni sa santé." };
+  }
+  function samuelHtml(r) {
+    const st = samStyle(r), plan = st ? samuelPlan(r, st) : null;
+    return '<div class="samuel" data-sam>' +
+      '<p class="sam-q">Avant de commencer <span class="meta">facultatif, pour cette séance</span></p>' +
+      '<div class="sam-chips" role="group" aria-label="Comment veux-tu travailler ?">' + Object.keys(STYLES).map((k) => '<button type="button" class="pill' + (st === k ? " on" : "") + '" aria-pressed="' + (st === k) + '" data-sam-st="' + k + '">' + esc(STYLES[k]) + "</button>").join("") + "</div>" +
+      (plan ? '<div class="sam-plan"><span class="sam-who">Samuel</span><p><b>' + (st === "defi" ? "Pour entrer :" : st === "doux" ? "Pour commencer en douceur :" : "Premier pas, " + plan.min + " min :") + "</b> " + esc(plan.pas) + "</p>" +
+        (st === "demarrer" ? '<button class="btn sm" type="button" data-sam-timer>Lancer ' + plan.min + ' min</button> <span class="sam-time" aria-live="polite"></span>' : "") + "</div>" : "") +
+      "</div>";
+  }
+  function bindSamuel(root, r, rerender) {
+    $$("[data-sam-st]", root).forEach((b) => b.addEventListener("click", () => {
+      const k = b.dataset.samSt; sam = sam.key === samKey(r) && sam.st === k ? { key: null, st: null } : { key: samKey(r), st: k };
+      clearInterval(samTimer); rerender();
+    }));
+    const tb = $("[data-sam-timer]", root);
+    if (tb) tb.addEventListener("click", () => {
+      const plan = samuelPlan(r, samStyle(r)); let left = plan.min * 60; const out = $(".sam-time", root);
+      clearInterval(samTimer); tb.disabled = true;
+      const tick = () => { out.textContent = Math.floor(left / 60) + ":" + String(left % 60).padStart(2, "0"); if (left-- <= 0) { clearInterval(samTimer); out.textContent = "C'est fait."; tb.disabled = false; } };
+      tick(); samTimer = setInterval(tick, 1000);
+    });
+  }
+  const startLabel = (r, mode) => { const st = samStyle(r); return st === "defi" ? (mode === "oral" ? "Commencer le défi à l'oral" : "Défi à l'écrit") : st ? (mode === "oral" ? "Commencer à l'oral" : "À l'écrit") : (mode === "oral" ? "Commencer à l'oral" : "À l'écrit"); };
+  function withSamuel(r, txt) { const st = samStyle(r); return st ? txt + "\n\n" + samuelPlan(r, st).consigne : txt; }
+  function forgetSamuel() { sam = { key: null, st: null }; clearInterval(samTimer); }
+
   function seancePrompt(r, mode) {
     const m = mat(r.matiere);
-    return "Margaux, lance une séance de " + m.nom + " avec " + profDe(m) + ", à l'" + (mode === "oral" ? "oral" : "écrit") + ", 20 minutes. " + (r.devoir ? "Sujet : le devoir « " + r.devoir.titre + " ». " : "") + "Commence par un petit résumé de là où j'en suis, puis termine par un bilan, la prochaine étape et la note de suivi dans Obsidian.";
+    return "Margaux, lance une séance de " + m.nom + " avec " + profDe(m) + ", à l'" + (mode === "oral" ? "oral" : "écrit") + ", " + (samStyle(r) === "doux" ? 15 : 20) + " minutes. " + (r.devoir ? "Sujet : le devoir « " + r.devoir.titre + " ». " : "") + "Commence par un petit résumé de là où j'en suis, puis termine par un bilan, la prochaine étape et la note de suivi dans Obsidian.";
   }
 
   // ---------- rendu ----------
@@ -129,14 +194,16 @@
     $("#reco").innerHTML = '<div class="card reco" style="--c:' + esc(col(m.couleur)) + '">' +
       '<div class="reco-top"><span class="chip" style="background:' + esc(col(m.couleur)) + '">' + esc(m.nom.split(" · ")[0]) + '</span><span class="who">avec ' + esc(r.devoir && r.devoir.prof ? r.devoir.prof : profDe(m)) + '</span></div>' +
       '<h1>' + esc(r.titre) + '</h1><p class="why">' + esc(r.raison) + '</p>' +
+      samuelHtml(r) +
       (r.devoir ? '<div class="row"><a class="btn" href="#devoir/' + esc(encodeURIComponent(r.devoir.id)) + '">Voir le devoir</a></div>' : "") +
-      '<div class="row"><button class="btn primary" type="button" data-start="oral">Commencer à l\'oral</button><button class="btn" type="button" data-start="ecrit">À l\'écrit</button><button class="btn ghost" type="button" data-done>J\'ai fait une séance</button></div>' +
+      '<div class="row"><button class="btn primary" type="button" data-start="oral">' + esc(startLabel(r, "oral")) + '</button><button class="btn" type="button" data-start="ecrit">' + esc(startLabel(r, "ecrit")) + '</button><button class="btn ghost" type="button" data-done>J\'ai fait une séance</button></div>' +
       '<p class="hint">« Commencer » copie la demande pour Margaux et ouvre son bureau : colle-la, ou dis-la au micro.</p></div>';
     $$("#reco [data-start]").forEach((btn) => btn.addEventListener("click", async () => {
-      const txt = seancePrompt(r, btn.dataset.start);
+      const txt = withSamuel(r, seancePrompt(r, btn.dataset.start)); forgetSamuel(); rAccueil();
       try { await navigator.clipboard.writeText(txt); toast("Demande copiée : colle-la dans le bureau de Margaux"); } catch (e) { toast("Copie impossible : écris « " + m.prof + ", séance de " + m.nom.split(" · ")[0] + " »"); }
       window.open(bureau(), "_blank", "noopener");
     }));
+    bindSamuel($("#reco"), r, rAccueil);
     $("#reco [data-done]").addEventListener("click", () => { go("seances"); openSeance(r.matiere); });
     const nx = (A.devoirs || []).filter(OPEN).sort((a, b) => sortKey(a).localeCompare(sortKey(b))).slice(0, 4);
     $("#next-dv").innerHTML = nx.length ? nx.map(dvLine).join("") : '<p class="empty">Rien à rendre pour l\'instant. Odile surveille tes mails et Moodle.</p>';
@@ -187,7 +254,8 @@
       '<div class="k">Attribué à</div><div class="v" id="dv-prof"><span class="avatar" aria-hidden="true">' + esc(attribue.slice(0, 1)) + "</span>" + esc(attribue) + (attribue !== titulaire ? ' <span class="meta">en attendant ' + esc(titulaire) + ", prof de la matière</span>" : "") + "</div>" +
       '<div class="k">Statut</div><div class="v"><select data-st="' + esc(d.id) + '" aria-label="Statut du devoir">' + opts + "</select></div>" +
       '<div class="k">Agenda</div><div class="v" id="dv-agenda">' + esc(agTxt) + "</div></div>" +
-      '<div class="row"><button class="btn primary" type="button" data-ask>Demander à Margaux</button><button class="btn" type="button" data-work>Travailler dessus</button></div></div>' +
+      samuelHtml({ devoir: d, matiere: d.matiere }) +
+      '<div class="row"><button class="btn primary" type="button" data-work>' + (samStyle({ devoir: d, matiere: d.matiere }) === "defi" ? "Commencer le défi" : "Travailler dessus") + '</button><button class="btn" type="button" data-ask>Demander à Margaux</button></div></div>' +
       '<div class="grid2"><div class="card"><h2>Consigne</h2>' + (d.consigne ? "<p class=\"pre\">" + esc(d.consigne) + "</p>" : '<p class="empty">Pas encore résumée.</p>') + (docs.filter((x) => x.type === "sujet" || x.type === "consigne").length ? '<div id="dv-sujet"><p class="hint">' + (d.consigne ? "Le texte complet est dans :" : "En attendant, le texte de la consigne est dans :") + "</p>" + docs.filter((x) => x.type === "sujet" || x.type === "consigne").map((x) => '<p class="sujet"><b>' + esc(x.nom) + "</b> <span class=\"meta\">" + esc(OU[x.ou] || "à localiser") + "</span></p>").join("") + "</div>" : "") + (d.consigneSource ? '<p class="hint">Source : ' + esc(d.consigneSource) + "</p>" : "") +
       (safeUrl(d.moodle) ? '<p><a href="' + esc(safeUrl(d.moodle)) + '" target="_blank" rel="noopener">Page du cours sur Moodle</a></p>' : "") + "</div>" +
       '<div class="card"><h2>Échéances</h2><div id="dv-ech">' + echHtml + "</div></div></div>" +
@@ -200,7 +268,9 @@
     $("#dv-detail [data-st]").addEventListener("change", (ev) => save((doc) => { const x = doc.devoirs.find((y) => y.id === d.id); if (x) { x.statut = ev.target.value; x.maj = now(); } }));
     const ask = async (txt) => { try { await navigator.clipboard.writeText(txt); toast("Demande copiée : colle-la dans le bureau de Margaux"); } catch (er) { toast("Copie impossible"); } window.open(bureau(), "_blank", "noopener"); };
     $("#dv-detail [data-ask]").addEventListener("click", () => ask("Margaux, où en est le devoir « " + d.titre + " »" + (d.code ? " (" + d.code + ")" : "") + " ? " + (flou ? "La date de rendu pour moi (alternant) est à vérifier. " : "") + "Dis-moi ce qui manque et la prochaine étape."));
-    $("#dv-detail [data-work]").addEventListener("click", () => ask("Margaux, je veux avancer sur le devoir « " + d.titre + " »" + (d.code ? " (" + d.code + ")" : "") + " avec " + attribue + ". Commence par un résumé de la consigne et de ce qui est déjà fait, puis propose le premier pas de 20 minutes."));
+    const rd = { devoir: d, matiere: d.matiere };
+    bindSamuel($("#dv-detail"), rd, rDevoir);
+    $("#dv-detail [data-work]").addEventListener("click", () => { const st = samStyle(rd); const txt = withSamuel(rd, "Margaux, je veux avancer sur le devoir « " + d.titre + " »" + (d.code ? " (" + d.code + ")" : "") + (attribue === "Margaux" ? " avec toi" : " avec " + attribue) + ", à l'écrit, " + (st === "doux" ? 15 : 20) + " minutes. " + (st ? "" : "Commence par un résumé de la consigne et de ce qui est déjà fait, puis propose le premier pas de 20 minutes.")); forgetSamuel(); rDevoir(); ask(txt); });
   }
 
   function rDevoirs() {
