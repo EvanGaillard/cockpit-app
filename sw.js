@@ -2,7 +2,7 @@
  * Les appels à l'API GitHub ne passent jamais par le cache (les données sont gérées par store.js et IndexedDB).
  * Pour publier une nouvelle version : changer VERSION, l'app propose alors « Recharger ».
  * Un changement de store.js ou merge.js oblige AUSSI à changer VERSION dans academie/sw.js, iut/sw.js et sport/sw.js (qui les mettent en cache). */
-const VERSION = "cockpit-app-1.0.5";
+const VERSION = "cockpit-app-1.0.6";
 const SHELL = [
   "./", "index.html", "styles.css", "merge.js", "store.js", "app.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png",

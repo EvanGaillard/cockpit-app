@@ -67,6 +67,8 @@ const VIEWS = ["aujourdhui", "taches", "projets", "notes", "semaine", "equipe", 
     const mock = new MockGitHub(DATA);
     const { ctx, page } = await setup(opts, mock);
     await page.goto(BASE);
+    if (opts.viewport.width <= 860) check(label + " : barre du bas sans le panneau « Applis » du bureau", !(await page.isVisible(".rail .apps")) && (await page.evaluate(() => { const r = document.querySelector(".rail").getBoundingClientRect(); return r.height < 120; })));
+    else check(label + " : panneau « Applis » visible sur ordinateur (Académie, IUT, Sport)", (await page.locator(".rail .apps a:visible").count()) === 3);
     check(label + " : bannière « jeton à saisir » au premier lancement", await page.isVisible("#setup-banner"));
     check(label + " : synchro initiale avec le dépôt", await connectToken(page));
     const nHab = mock.json("habits.json").items.length;

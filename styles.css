@@ -417,3 +417,4 @@ details.adv summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 .acadlink { font-weight: 700; }
 .apps { display: grid; gap: 4px; }
 .apps .eyebrow { padding: 0 10px; }
+@media (max-width: 860px) { .rail .apps { display: none; } } /* sur téléphone : les applis sont dans l'en-tête d'Aujourd'hui, pas dans la barre du bas */
