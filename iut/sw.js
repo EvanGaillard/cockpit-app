@@ -1,6 +1,6 @@
 /* IUT · service worker (portée : iut/). Le code vient de ../academie/ : un changement de academie/app.js ou styles.css oblige à changer VERSION ici aussi. Met l'app en cache pour l'ouvrir sans réseau.
  * L'API GitHub ne passe jamais par le cache. Nouvelle version : changer VERSION. */
-const VERSION = "iut-0.6.0";
+const VERSION = "iut-0.6.1";
 const SHELL = ["./", "index.html", "styles.css", "../academie/app.js", "../academie/styles.css", "manifest.webmanifest", "../merge.js", "../store.js", "../fonts/bricolage.woff2", "../fonts/dmsans.woff2", "../icons/icon-192.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k.startsWith("iut-") && k !== VERSION).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });

@@ -988,7 +988,7 @@
   }
 
   // ---------- Réglages : jeton GitHub et état de la synchro ----------
-  const APP_VERSION = "1.0.6";
+  const APP_VERSION = "1.0.7";
   const fmtFull = (v) => { if (!v) return "jamais"; const d = new Date(v); return isNaN(d) ? v : d.toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); };
   function renderSettings() {
     const st = Store.status(), cfg = Store.getSettings();
@@ -1012,6 +1012,12 @@
     if (!String(s.owner || "").trim() || !String(s.repo || "").trim()) { showRes(false, "Indique le propriétaire et le nom de ton dépôt de données privé."); return; }
     showRes(true, "Enregistré. Synchronisation…");
     const r = await Store.saveSettings(s);
+    if (r && r.ok === false && r.pending) { // ancien dépôt injoignable : proposer de changer quand même, sans rien perdre
+      showRes(false, r.text + " Si l'ancien dépôt n'existe plus ou n'est plus le bon, tu peux changer quand même : ces document(s) restent archivés sur cet appareil.");
+      const b = h("button", { class: "btn sm", type: "button", text: "Changer quand même (garder une archive)" });
+      b.addEventListener("click", () => armConfirm(b, async () => { showRes(true, "Archivage puis changement de dépôt…"); const r2 = await Store.saveSettings(s, { force: true }); if (r2 && r2.ok === false) { showRes(false, r2.text); return; } $("set-token").value = ""; const st = Store.status(); showRes(st.level === "ok", st.level === "ok" ? "Dépôt changé (ancienne copie archivée sur l'appareil). Données à jour." : st.text); }));
+      $("set-res").appendChild(b); return;
+    }
     if (r && r.ok === false) { showRes(false, r.text); return; }
     $("set-token").value = ""; const st = Store.status();
     showRes(st.level === "ok", st.level === "ok" ? "Enregistré. Données à jour." : st.text);

@@ -1,6 +1,6 @@
 /* Sport · service worker (portée : sport/). Met l'app en cache pour l'ouvrir sans réseau.
  * L'API GitHub ne passe jamais par le cache. Nouvelle version : changer VERSION. */
-const VERSION = "sport-0.1.0";
+const VERSION = "sport-0.1.1";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "manifest.webmanifest", "../merge.js", "../store.js", "../fonts/bricolage.woff2", "../fonts/dmsans.woff2", "../icons/icon-192.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k.startsWith("sport-") && k !== VERSION).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });

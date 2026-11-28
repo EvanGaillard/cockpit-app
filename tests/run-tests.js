@@ -192,6 +192,33 @@ const VIEWS = ["aujourdhui", "taches", "projets", "notes", "semaine", "equipe", 
   }
 
 
+  // ---------- 3 bis. Ancien dépôt injoignable (nom faux) + documents non envoyés : « Changer quand même » ----------
+  {
+    const A = { owner: "demo-owner", repo: "nom-faux", dir: "data" };
+    const B = { owner: "demo-owner", repo: "leon-data-demo", dir: "data" };
+    const mockA = new MockGitHub(DATA, A), mockB = new MockGitHub(DATA, B);
+    mockB.commits.length = 0;
+    const { ctx, page } = await setup({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }, [mockA, mockB]);
+    await page.goto(BASE);
+    check("ancien dépôt : connexion", await connectToken(page, A));
+    await ctx.setOffline(true);
+    await page.goto(BASE + "#aujourdhui");
+    await page.click(".qa-open"); await page.fill("#qa-title", "Saisie coincée"); await page.click("#qa-form button[type=submit]");
+    await page.waitForTimeout(300);
+    await ctx.setOffline(false); mockA.failNext = 1000; // l'ancien dépôt ne répond plus
+    await page.goto(BASE + "#reglages");
+    await fillRepo(page, B); await page.click("#set-form button[type=submit]");
+    check("dépôt injoignable : refus expliqué et bouton « Changer quand même » proposé", await until(async () => /refusé/.test(await page.textContent("#set-res")) && (await page.locator("#set-res button").count()) === 1, 5000));
+    await page.click("#set-res button");
+    check("un premier appui demande confirmation (rien ne change)", (await page.evaluate(() => CockpitStore.getSettings().repo)) === A.repo);
+    await page.click("#set-res button");
+    check("confirmé : nouveau dépôt réglé et « À jour »", await until(async () => (await page.evaluate(() => CockpitStore.getSettings().repo)) === B.repo && (await page.textContent("#sync-t")) === "À jour", 8000));
+    check("rien de l'ancien appareil poussé vers le nouveau dépôt", mockB.commits.length === 0 && !mockB.json("tasks.json").items.some((t) => t.title === "Saisie coincée"));
+    const arch = await page.evaluate(async () => { const ks = await CockpitStore.archives(); return ks; });
+    check("la saisie coincée est gardée dans l'archive de l'appareil", arch.some((k) => k.includes(A.repo)));
+    await ctx.close();
+  }
+
   // ---------- 4. Changement de dépôt (migration vers le dépôt de données) ----------
   {
     const A = { owner: "demo-owner", repo: "ancien-depot", dir: "Systeme/Cockpit/data" };

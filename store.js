@@ -241,14 +241,15 @@
   function resetLocal() {
     DOCS.forEach((n) => { recs[n] = { name: n, data: M.clone(EMPTY[n]), base: undefined, sha: null, dirty: false, editedAt: null }; persist(n); emit("change", n, M.clone(EMPTY[n]), "reset"); });
   }
-  async function saveSettings(s) {
+  async function saveSettings(s, opts) {
     if (syncing) await syncing.catch(() => {}); // ne jamais changer de dépôt au milieu d'un envoi
     const next = Object.assign({}, settings, s);
     ["owner", "repo", "branch", "dir"].forEach((k) => { next[k] = String(next[k] == null ? DEFAULTS[k] : next[k]).trim() || DEFAULTS[k]; });
     next.token = String(next.token || "").trim();
     const repoChanged = ["owner", "repo", "branch", "dir"].some((k) => next[k] !== settings[k]);
     if (repoChanged && isConfigured()) {
-      if (pendingCount()) return { ok: false, text: "Changement de dépôt refusé : " + pendingCount() + " document(s) pas encore envoyé(s) vers " + settings.owner + "/" + settings.repo + ". Reconnecte-toi au réseau et attends « À jour », puis recommence." };
+      // force : l'ancien dépôt est inaccessible (nom faux, supprimé) ; les documents non envoyés restent dans l'archive locale
+      if (pendingCount() && !(opts && opts.force)) return { ok: false, pending: pendingCount(), text: "Changement de dépôt refusé : " + pendingCount() + " document(s) pas encore envoyé(s) vers " + settings.owner + "/" + settings.repo + ". Reconnecte-toi au réseau et attends « À jour », puis recommence." };
       await archiveLocal("changement de dépôt");
       resetLocal();
     }
