@@ -198,7 +198,7 @@ const VIEWS = ["aujourdhui", "taches", "projets", "notes", "semaine", "equipe", 
     const B = { owner: "demo-owner", repo: "leon-data-demo", dir: "data" };
     const mockA = new MockGitHub(DATA, A), mockB = new MockGitHub(DATA, B);
     mockB.commits.length = 0;
-    const { ctx, page } = await setup({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }, [mockA, mockB]);
+    const { ctx, page } = await setup({ viewport: { width: 1280, height: 800 } }, [mockA, mockB]);
     await page.goto(BASE);
     check("ancien dépôt : connexion", await connectToken(page, A));
     await ctx.setOffline(true);
